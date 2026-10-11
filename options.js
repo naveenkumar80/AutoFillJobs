@@ -680,6 +680,325 @@ function removeSkill(skillToRemove) {
 
 
 // ============================================================
+// 2C-2. SKILLS AUTOCOMPLETE & AUTO-SUGGESTIONS
+// ============================================================
+
+const SKILL_DATABASE = [
+  // Programming Languages
+  { name: 'TypeScript', category: 'Language' },
+  { name: 'JavaScript', category: 'Language' },
+  { name: 'Python', category: 'Language' },
+  { name: 'Go (Golang)', category: 'Language' },
+  { name: 'Rust', category: 'Language' },
+  { name: 'Java', category: 'Language' },
+  { name: 'C#', category: 'Language' },
+  { name: 'C++', category: 'Language' },
+  { name: 'C', category: 'Language' },
+  { name: 'Ruby', category: 'Language' },
+  { name: 'PHP', category: 'Language' },
+  { name: 'Swift', category: 'Language' },
+  { name: 'Kotlin', category: 'Language' },
+  { name: 'SQL', category: 'Language' },
+  { name: 'HTML5', category: 'Language' },
+  { name: 'CSS3', category: 'Language' },
+  { name: 'Bash / Shell', category: 'Language' },
+  { name: 'Dart', category: 'Language' },
+  { name: 'Scala', category: 'Language' },
+  { name: 'R', category: 'Language' },
+  { name: 'Solidity', category: 'Language' },
+
+  // Frontend Frameworks & Libraries
+  { name: 'React', category: 'Frontend' },
+  { name: 'Next.js', category: 'Frontend' },
+  { name: 'Vue.js', category: 'Frontend' },
+  { name: 'Nuxt.js', category: 'Frontend' },
+  { name: 'Angular', category: 'Frontend' },
+  { name: 'Svelte', category: 'Frontend' },
+  { name: 'SvelteKit', category: 'Frontend' },
+  { name: 'Tailwind CSS', category: 'Frontend' },
+  { name: 'Redux', category: 'Frontend' },
+  { name: 'Zustand', category: 'Frontend' },
+  { name: 'TanStack Query (React Query)', category: 'Frontend' },
+  { name: 'Vite', category: 'Frontend' },
+  { name: 'Webpack', category: 'Frontend' },
+  { name: 'Sass / SCSS', category: 'Frontend' },
+  { name: 'Three.js / WebGL', category: 'Frontend' },
+  { name: 'WebSockets', category: 'Frontend' },
+  { name: 'WebRTC', category: 'Frontend' },
+  { name: 'Storybook', category: 'Frontend' },
+
+  // Backend Frameworks & Runtimes
+  { name: 'Node.js', category: 'Backend' },
+  { name: 'Express.js', category: 'Backend' },
+  { name: 'NestJS', category: 'Backend' },
+  { name: 'FastAPI', category: 'Backend' },
+  { name: 'Django', category: 'Backend' },
+  { name: 'Flask', category: 'Backend' },
+  { name: 'Spring Boot', category: 'Backend' },
+  { name: '.NET Core', category: 'Backend' },
+  { name: 'Ruby on Rails', category: 'Backend' },
+  { name: 'Laravel', category: 'Backend' },
+  { name: 'GraphQL', category: 'Backend' },
+  { name: 'REST APIs', category: 'Backend' },
+  { name: 'gRPC', category: 'Backend' },
+  { name: 'Microservices', category: 'Backend' },
+  { name: 'RabbitMQ', category: 'Backend' },
+  { name: 'Apache Kafka', category: 'Backend' },
+
+  // AI, Machine Learning & Data
+  { name: 'Machine Learning', category: 'AI & Data' },
+  { name: 'Deep Learning', category: 'AI & Data' },
+  { name: 'Generative AI', category: 'AI & Data' },
+  { name: 'Large Language Models (LLMs)', category: 'AI & Data' },
+  { name: 'PyTorch', category: 'AI & Data' },
+  { name: 'TensorFlow', category: 'AI & Data' },
+  { name: 'LangChain', category: 'AI & Data' },
+  { name: 'LlamaIndex', category: 'AI & Data' },
+  { name: 'Natural Language Processing (NLP)', category: 'AI & Data' },
+  { name: 'Computer Vision', category: 'AI & Data' },
+  { name: 'Pandas', category: 'AI & Data' },
+  { name: 'NumPy', category: 'AI & Data' },
+  { name: 'Scikit-Learn', category: 'AI & Data' },
+  { name: 'Apache Spark', category: 'AI & Data' },
+  { name: 'Snowflake', category: 'AI & Data' },
+  { name: 'Databricks', category: 'AI & Data' },
+  { name: 'OpenAI API', category: 'AI & Data' },
+  { name: 'Hugging Face', category: 'AI & Data' },
+
+  // Cloud & DevOps
+  { name: 'AWS', category: 'Cloud & DevOps' },
+  { name: 'Microsoft Azure', category: 'Cloud & DevOps' },
+  { name: 'Google Cloud Platform (GCP)', category: 'Cloud & DevOps' },
+  { name: 'Docker', category: 'Cloud & DevOps' },
+  { name: 'Kubernetes', category: 'Cloud & DevOps' },
+  { name: 'Terraform', category: 'Cloud & DevOps' },
+  { name: 'CI/CD Pipelines', category: 'Cloud & DevOps' },
+  { name: 'GitHub Actions', category: 'Cloud & DevOps' },
+  { name: 'GitLab CI', category: 'Cloud & DevOps' },
+  { name: 'Jenkins', category: 'Cloud & DevOps' },
+  { name: 'Linux', category: 'Cloud & DevOps' },
+  { name: 'Nginx', category: 'Cloud & DevOps' },
+  { name: 'Ansible', category: 'Cloud & DevOps' },
+  { name: 'Prometheus', category: 'Cloud & DevOps' },
+  { name: 'Grafana', category: 'Cloud & DevOps' },
+  { name: 'Cloudflare', category: 'Cloud & DevOps' },
+  { name: 'Serverless / AWS Lambda', category: 'Cloud & DevOps' },
+
+  // Databases & Storage
+  { name: 'PostgreSQL', category: 'Database' },
+  { name: 'MySQL', category: 'Database' },
+  { name: 'MongoDB', category: 'Database' },
+  { name: 'Redis', category: 'Database' },
+  { name: 'SQLite', category: 'Database' },
+  { name: 'DynamoDB', category: 'Database' },
+  { name: 'Supabase', category: 'Database' },
+  { name: 'Firebase', category: 'Database' },
+  { name: 'Elasticsearch', category: 'Database' },
+  { name: 'Prisma ORM', category: 'Database' },
+  { name: 'Drizzle ORM', category: 'Database' },
+  { name: 'Neo4j', category: 'Database' },
+  { name: 'Cassandra', category: 'Database' },
+
+  // Testing & Tooling
+  { name: 'Jest', category: 'Testing' },
+  { name: 'Vitest', category: 'Testing' },
+  { name: 'Playwright', category: 'Testing' },
+  { name: 'Cypress', category: 'Testing' },
+  { name: 'Selenium', category: 'Testing' },
+  { name: 'TDD', category: 'Testing' },
+  { name: 'Git', category: 'Tools' },
+  { name: 'GitHub', category: 'Tools' },
+  { name: 'Postman', category: 'Tools' },
+  { name: 'Figma', category: 'Design & UI' },
+  { name: 'Jira', category: 'Tools' },
+
+  // Mobile
+  { name: 'React Native', category: 'Mobile' },
+  { name: 'Flutter', category: 'Mobile' },
+  { name: 'iOS Development', category: 'Mobile' },
+  { name: 'Android Development', category: 'Mobile' },
+
+  // Architecture & Engineering Practices
+  { name: 'System Design', category: 'Architecture' },
+  { name: 'Distributed Systems', category: 'Architecture' },
+  { name: 'Clean Architecture', category: 'Architecture' },
+  { name: 'Agile / Scrum', category: 'Methodology' },
+];
+
+const SkillsAutocomplete = {
+  inputEl: null,
+  menuEl: null,
+  activeIndex: -1,
+  currentMatches: [],
+  isOpen: false,
+
+  init() {
+    this.inputEl = document.getElementById('newSkillInput');
+    this.menuEl = document.getElementById('skillsAutocompleteMenu');
+    if (!this.inputEl || !this.menuEl) return;
+
+    // Input typing & focus
+    this.inputEl.addEventListener('input', () => {
+      this.handleInput();
+    });
+
+    this.inputEl.addEventListener('focus', () => {
+      if (this.inputEl.value.trim().length > 0) {
+        this.handleInput();
+      }
+    });
+
+    // Keyboard navigation
+    this.inputEl.addEventListener('keydown', (e) => {
+      this.handleKeydown(e);
+    });
+
+    // Item click
+    this.menuEl.addEventListener('click', (e) => {
+      const item = e.target.closest('.autocomplete-item');
+      if (item) {
+        const skillName = item.getAttribute('data-skill');
+        if (skillName) {
+          addSkill(skillName);
+          this.close();
+          this.inputEl.value = '';
+          this.inputEl.focus();
+        }
+      }
+    });
+
+    // Close on outside click
+    document.addEventListener('pointerdown', (e) => {
+      if (!this.isOpen) return;
+      if (!this.menuEl.contains(e.target) && e.target !== this.inputEl) {
+        this.close();
+      }
+    });
+  },
+
+  handleInput() {
+    const query = this.inputEl.value.trim().toLowerCase();
+    if (!query) {
+      this.close();
+      return;
+    }
+
+    const skillsTextarea = document.getElementById('skills');
+    const existingSkills = parseSkillsArray(skillsTextarea ? skillsTextarea.value : '');
+    const existingLower = new Set(existingSkills.map((s) => s.toLowerCase()));
+
+    // Find matches not already added
+    const matches = SKILL_DATABASE.filter((item) => {
+      if (existingLower.has(item.name.toLowerCase())) return false;
+      return item.name.toLowerCase().includes(query);
+    });
+
+    // Sort: items that start with query first, then alphabetical
+    matches.sort((a, b) => {
+      const aStarts = a.name.toLowerCase().startsWith(query);
+      const bStarts = b.name.toLowerCase().startsWith(query);
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    this.currentMatches = matches.slice(0, 8); // Top 8 suggestions
+    this.activeIndex = this.currentMatches.length > 0 ? 0 : -1;
+    this.render(query);
+  },
+
+  render(query) {
+    if (this.currentMatches.length === 0) {
+      this.menuEl.innerHTML = `
+        <div class="autocomplete-empty">
+          Press <strong>Enter</strong> to add "${escapeHtml(this.inputEl.value.trim())}" as a custom skill
+        </div>
+      `;
+      this.menuEl.classList.add('open');
+      this.isOpen = true;
+      return;
+    }
+
+    this.menuEl.innerHTML = this.currentMatches.map((item, idx) => {
+      // Highlight matching query in skill name
+      const name = item.name;
+      const lowerName = name.toLowerCase();
+      const qIdx = lowerName.indexOf(query);
+      let highlightedName = escapeHtml(name);
+
+      if (qIdx !== -1) {
+        const before = escapeHtml(name.substring(0, qIdx));
+        const match = escapeHtml(name.substring(qIdx, qIdx + query.length));
+        const after = escapeHtml(name.substring(qIdx + query.length));
+        highlightedName = `${before}<mark>${match}</mark>${after}`;
+      }
+
+      const isActive = idx === this.activeIndex ? 'active' : '';
+
+      return `
+        <div class="autocomplete-item ${isActive}" role="option" data-idx="${idx}" data-skill="${escapeHtml(item.name)}">
+          <div class="autocomplete-item-left">
+            <span class="autocomplete-skill-name">${highlightedName}</span>
+            <span class="autocomplete-category-badge">${escapeHtml(item.category)}</span>
+          </div>
+          <kbd class="autocomplete-kbd">↵ Enter</kbd>
+        </div>
+      `;
+    }).join('');
+
+    this.menuEl.classList.add('open');
+    this.isOpen = true;
+  },
+
+  handleKeydown(e) {
+    if (!this.isOpen || this.currentMatches.length === 0) {
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      this.activeIndex = (this.activeIndex + 1) % this.currentMatches.length;
+      this.updateActiveItem();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      this.activeIndex = (this.activeIndex - 1 + this.currentMatches.length) % this.currentMatches.length;
+      this.updateActiveItem();
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      if (this.activeIndex >= 0 && this.activeIndex < this.currentMatches.length) {
+        e.preventDefault();
+        e.stopPropagation();
+        const selected = this.currentMatches[this.activeIndex];
+        addSkill(selected.name);
+        this.close();
+        if (this.inputEl) this.inputEl.value = '';
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      this.close();
+    }
+  },
+
+  updateActiveItem() {
+    const items = this.menuEl.querySelectorAll('.autocomplete-item');
+    items.forEach((el, idx) => {
+      el.classList.toggle('active', idx === this.activeIndex);
+      if (idx === this.activeIndex) {
+        el.scrollIntoView({ block: 'nearest' });
+      }
+    });
+  },
+
+  close() {
+    if (!this.menuEl) return;
+    this.menuEl.classList.remove('open');
+    this.isOpen = false;
+    this.activeIndex = -1;
+    this.currentMatches = [];
+  }
+};
+
+
+// ============================================================
 // 2D. THEME MANAGER (DARK / LIGHT / NO ALL-BLACK)
 // ============================================================
 
@@ -1499,23 +1818,35 @@ document.addEventListener('DOMContentLoaded', () => {
     addExperience();
   });
 
-  // Dynamic Skills Manager (+ button & Enter key)
+  // Dynamic Skills Manager (+ button, Autocomplete & Enter key)
   const newSkillInput = document.getElementById('newSkillInput');
   const btnAddSkill = document.getElementById('btnAddSkill');
+
+  SkillsAutocomplete.init();
 
   btnAddSkill?.addEventListener('click', () => {
     if (newSkillInput && newSkillInput.value.trim()) {
       addSkill(newSkillInput.value.trim());
       newSkillInput.value = '';
+      SkillsAutocomplete.close();
     }
   });
 
   newSkillInput?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
+      if (
+        SkillsAutocomplete.isOpen &&
+        SkillsAutocomplete.currentMatches.length > 0 &&
+        SkillsAutocomplete.activeIndex >= 0
+      ) {
+        // Handled by SkillsAutocomplete.handleKeydown
+        return;
+      }
       e.preventDefault();
       if (newSkillInput.value.trim()) {
         addSkill(newSkillInput.value.trim());
         newSkillInput.value = '';
+        SkillsAutocomplete.close();
       }
     }
   });
