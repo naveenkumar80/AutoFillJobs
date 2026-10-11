@@ -19,6 +19,8 @@ const PROFILE_FIELDS = [
   // Work Experience
   'currentJobTitle',
   'currentCompany',
+  'currentStartDate',
+  'currentEndDate',
   'yearsOfExperience',
   'desiredSalary',
   'experienceDescription',
@@ -375,6 +377,19 @@ function renderExperienceList() {
     return;
   }
 
+  // Ensure legacy duration strings are split into startDate / endDate if missing
+  currentWorkHistory.forEach((item) => {
+    if (!item.startDate && item.duration) {
+      const parts = item.duration.split(/\s*[-–—to]+\s*/i);
+      if (parts.length >= 2) {
+        item.startDate = parts[0]?.trim() || '';
+        item.endDate = parts[1]?.trim() || '';
+      } else {
+        item.startDate = item.duration.trim();
+      }
+    }
+  });
+
   container.innerHTML = currentWorkHistory.map((item, idx) => `
     <div class="dynamic-entry-card" data-idx="${idx}">
       <div class="entry-card-header">
@@ -399,9 +414,36 @@ function renderExperienceList() {
           <label>Company / Organization</label>
           <input type="text" class="exp-company-input" data-idx="${idx}" value="${escapeHtml(item.company || '')}" placeholder="e.g. Acme Corp" />
         </div>
-        <div class="form-group full-width">
-          <label>Dates / Duration</label>
-          <input type="text" class="exp-duration-input" data-idx="${idx}" value="${escapeHtml(item.duration || '')}" placeholder="e.g. 2019 – 2021 or 2 years" />
+        <div class="form-group">
+          <label>Start Date</label>
+          <div class="datepicker-input-wrapper">
+            <input type="text" class="exp-start-input month-year-input" data-idx="${idx}" value="${escapeHtml(item.startDate || '')}" placeholder="Select Month &amp; Year" readonly />
+            <button type="button" class="btn-picker-icon" tabindex="-1" title="Select Month &amp; Year">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>End Date</label>
+          <div class="end-date-wrapper">
+            <div class="datepicker-input-wrapper" style="flex: 1;">
+              <input type="text" class="exp-end-input month-year-input is-end-date" data-idx="${idx}" value="${escapeHtml(item.endDate || '')}" placeholder="Select Month &amp; Year or Present" readonly />
+              <button type="button" class="btn-picker-icon" tabindex="-1" title="Select Month &amp; Year">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                  <line x1="16" y1="2" x2="16" y2="6"></line>
+                  <line x1="8" y1="2" x2="8" y2="6"></line>
+                  <line x1="3" y1="10" x2="21" y2="10"></line>
+                </svg>
+              </button>
+            </div>
+            <button type="button" class="btn-present-chip" data-idx="${idx}" title="Set End Date to Present">Present</button>
+          </div>
         </div>
         <div class="form-group full-width">
           <label>Key Responsibilities &amp; Achievements</label>
@@ -442,10 +484,38 @@ function renderExperienceList() {
     });
   });
 
-  container.querySelectorAll('.exp-duration-input').forEach((inp) => {
+  container.querySelectorAll('.exp-start-input').forEach((inp) => {
     inp.addEventListener('input', (e) => {
       const idx = parseInt(e.target.getAttribute('data-idx'), 10);
-      if (currentWorkHistory[idx]) currentWorkHistory[idx].duration = e.target.value;
+      if (currentWorkHistory[idx]) {
+        currentWorkHistory[idx].startDate = e.target.value;
+        currentWorkHistory[idx].duration = [e.target.value, currentWorkHistory[idx].endDate].filter(Boolean).join(' – ');
+      }
+    });
+  });
+
+  container.querySelectorAll('.exp-end-input').forEach((inp) => {
+    inp.addEventListener('input', (e) => {
+      const idx = parseInt(e.target.getAttribute('data-idx'), 10);
+      if (currentWorkHistory[idx]) {
+        currentWorkHistory[idx].endDate = e.target.value;
+        currentWorkHistory[idx].duration = [currentWorkHistory[idx].startDate, e.target.value].filter(Boolean).join(' – ');
+      }
+    });
+  });
+
+  container.querySelectorAll('.btn-present-chip').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      const idx = parseInt(e.currentTarget.getAttribute('data-idx'), 10);
+      if (currentWorkHistory[idx]) {
+        currentWorkHistory[idx].endDate = 'Present';
+        currentWorkHistory[idx].duration = [currentWorkHistory[idx].startDate, 'Present'].filter(Boolean).join(' – ');
+        const endInp = container.querySelector(`.exp-end-input[data-idx="${idx}"]`);
+        if (endInp) {
+          endInp.value = 'Present';
+          endInp.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }
     });
   });
 
@@ -460,12 +530,20 @@ function renderExperienceList() {
 /**
  * Add a new work experience entry
  */
-function addExperience(jobTitle = '', company = '', duration = '', description = '') {
+function addExperience(jobTitle = '', company = '', startDate = '', endDate = '', description = '', duration = '') {
+  if (!startDate && duration) {
+    const parts = duration.split(/\s*[-–—to]+\s*/i);
+    startDate = parts[0]?.trim() || '';
+    endDate = parts[1]?.trim() || '';
+  }
+  const computedDuration = duration || [startDate, endDate].filter(Boolean).join(' – ');
   currentWorkHistory.push({
     id: 'exp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
     jobTitle,
     company,
-    duration,
+    startDate,
+    endDate,
+    duration: computedDuration,
     description,
   });
   renderExperienceList();
@@ -493,7 +571,12 @@ function deleteExperience(idx) {
  */
 function gatherWorkHistory() {
   return currentWorkHistory.filter(
-    (exp) => (exp.jobTitle && exp.jobTitle.trim()) || (exp.company && exp.company.trim()) || (exp.description && exp.description.trim())
+    (exp) =>
+      (exp.jobTitle && exp.jobTitle.trim()) ||
+      (exp.company && exp.company.trim()) ||
+      (exp.startDate && exp.startDate.trim()) ||
+      (exp.endDate && exp.endDate.trim()) ||
+      (exp.description && exp.description.trim())
   );
 }
 
@@ -626,6 +709,250 @@ function toggleTheme() {
   applyTheme(newTheme);
   showToast(`Switched to ${newTheme === 'light' ? 'Light' : 'Slate Dark'} theme`, 'success');
 }
+
+
+// ============================================================
+// 2E. MONTH & YEAR PICKER COMPONENT (PREVENTS INVALID INPUTS)
+// ============================================================
+
+const MonthYearPicker = {
+  activeInput: null,
+  selectedYear: new Date().getFullYear(),
+  selectedMonth: null, // 0-indexed (0 = January)
+  isOpen: false,
+
+  MONTH_NAMES: [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ],
+
+  MONTH_SHORT: [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ],
+
+  init() {
+    this.pickerEl = document.getElementById('monthYearPicker');
+    if (!this.pickerEl) return;
+
+    this.yearSelect = document.getElementById('pickerYearSelect');
+    this.monthsGrid = document.getElementById('pickerMonthsGrid');
+    this.prevYearBtn = document.getElementById('pickerPrevYear');
+    this.nextYearBtn = document.getElementById('pickerNextYear');
+    this.btnPresent = document.getElementById('pickerBtnPresent');
+    this.btnClear = document.getElementById('pickerBtnClear');
+    this.btnClose = document.getElementById('pickerBtnClose');
+
+    // Populate year selector (from 1970 to current year + 6)
+    const currentYear = new Date().getFullYear();
+    const startYear = 1970;
+    const endYear = currentYear + 6;
+    let yearOptions = '';
+    for (let y = endYear; y >= startYear; y--) {
+      yearOptions += `<option value="${y}">${y}</option>`;
+    }
+    if (this.yearSelect) {
+      this.yearSelect.innerHTML = yearOptions;
+    }
+
+    // Render 12 month buttons
+    if (this.monthsGrid) {
+      this.monthsGrid.innerHTML = this.MONTH_SHORT.map((m, idx) => `
+        <button type="button" class="picker-month-btn" data-month="${idx}">
+          ${m}
+        </button>
+      `).join('');
+    }
+
+    // Event listeners
+    this.prevYearBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.setYear(this.selectedYear - 1);
+    });
+
+    this.nextYearBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.setYear(this.selectedYear + 1);
+    });
+
+    this.yearSelect?.addEventListener('change', (e) => {
+      this.setYear(parseInt(e.target.value, 10));
+    });
+
+    this.monthsGrid?.addEventListener('click', (e) => {
+      const btn = e.target.closest('.picker-month-btn');
+      if (btn) {
+        const monthIdx = parseInt(btn.getAttribute('data-month'), 10);
+        this.selectMonth(monthIdx);
+      }
+    });
+
+    this.btnPresent?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.setValue('Present');
+      this.close();
+    });
+
+    this.btnClear?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.setValue('');
+      this.close();
+    });
+
+    this.btnClose?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.close();
+    });
+
+    // Close on outside click
+    document.addEventListener('pointerdown', (e) => {
+      if (!this.isOpen) return;
+      if (
+        !this.pickerEl.contains(e.target) &&
+        (!this.activeInput || !this.activeInput.contains(e.target)) &&
+        !e.target.closest('.btn-picker-icon')
+      ) {
+        this.close();
+      }
+    });
+
+    // Close on Escape key
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.isOpen) {
+        this.close();
+      }
+    });
+
+    // Delegated click listener to open picker on any .month-year-input or .btn-picker-icon
+    document.addEventListener('click', (e) => {
+      const input = e.target.closest('.month-year-input');
+      if (input) {
+        this.open(input);
+        return;
+      }
+      const iconBtn = e.target.closest('.btn-picker-icon');
+      if (iconBtn) {
+        const wrapper = iconBtn.closest('.datepicker-input-wrapper');
+        const targetInput = wrapper?.querySelector('.month-year-input');
+        if (targetInput) {
+          this.open(targetInput);
+        }
+      }
+    });
+  },
+
+  setYear(year) {
+    this.selectedYear = year;
+    if (this.yearSelect) {
+      this.yearSelect.value = year;
+    }
+    this.updateMonthHighlights();
+  },
+
+  selectMonth(monthIdx) {
+    this.selectedMonth = monthIdx;
+    const formatted = `${this.MONTH_NAMES[monthIdx]} ${this.selectedYear}`;
+    this.setValue(formatted);
+    this.close();
+  },
+
+  setValue(val) {
+    if (!this.activeInput) return;
+    this.activeInput.value = val;
+    this.activeInput.dispatchEvent(new Event('input', { bubbles: true }));
+    this.activeInput.dispatchEvent(new Event('change', { bubbles: true }));
+  },
+
+  updateMonthHighlights() {
+    if (!this.monthsGrid) return;
+    const btns = this.monthsGrid.querySelectorAll('.picker-month-btn');
+    btns.forEach((btn) => {
+      const m = parseInt(btn.getAttribute('data-month'), 10);
+      btn.classList.toggle('selected', m === this.selectedMonth);
+    });
+  },
+
+  open(inputEl) {
+    if (!this.pickerEl) return;
+    this.activeInput = inputEl;
+
+    // Parse current value in input
+    const currentVal = (inputEl.value || '').trim();
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth();
+
+    if (currentVal.toLowerCase() === 'present') {
+      this.selectedYear = currentYear;
+      this.selectedMonth = null;
+    } else if (currentVal) {
+      let foundMonth = null;
+      let foundYear = null;
+
+      const isoMatch = currentVal.match(/^(\d{4})[-/](\d{1,2})$/);
+      if (isoMatch) {
+        foundYear = parseInt(isoMatch[1], 10);
+        foundMonth = parseInt(isoMatch[2], 10) - 1;
+      } else {
+        this.MONTH_NAMES.forEach((name, idx) => {
+          if (new RegExp(name.substr(0, 3), 'i').test(currentVal)) {
+            foundMonth = idx;
+          }
+        });
+        const yearMatch = currentVal.match(/\b(19\d\d|20\d\d)\b/);
+        if (yearMatch) {
+          foundYear = parseInt(yearMatch[1], 10);
+        }
+      }
+
+      this.selectedYear = foundYear || currentYear;
+      this.selectedMonth = foundMonth !== null ? foundMonth : currentMonth;
+    } else {
+      this.selectedYear = currentYear;
+      this.selectedMonth = currentMonth;
+    }
+
+    this.setYear(this.selectedYear);
+    this.updateMonthHighlights();
+
+    // Check if this input is an End Date (can show "Present" button)
+    const isEndDate =
+      inputEl.classList.contains('is-end-date') ||
+      inputEl.classList.contains('exp-end-input') ||
+      inputEl.id === 'currentEndDate';
+
+    if (this.btnPresent) {
+      this.btnPresent.style.display = isEndDate ? 'inline-flex' : 'none';
+    }
+
+    // Position the popover near the target input
+    const rect = inputEl.getBoundingClientRect();
+    const pickerWidth = 280;
+    const pickerHeight = 220;
+
+    let left = rect.left;
+    if (left + pickerWidth > window.innerWidth - 12) {
+      left = window.innerWidth - pickerWidth - 12;
+    }
+    if (left < 12) left = 12;
+
+    let top = rect.bottom + 6;
+    if (top + pickerHeight > window.innerHeight && rect.top > pickerHeight + 12) {
+      top = rect.top - pickerHeight - 6;
+    }
+
+    this.pickerEl.style.left = `${left}px`;
+    this.pickerEl.style.top = `${top}px`;
+    this.pickerEl.classList.add('open');
+    this.isOpen = true;
+  },
+
+  close() {
+    if (!this.pickerEl) return;
+    this.pickerEl.classList.remove('open');
+    this.isOpen = false;
+    this.activeInput = null;
+  },
+};
 
 
 // ============================================================
@@ -1141,6 +1468,17 @@ document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   loadProfile();
   renderLogs();
+  MonthYearPicker.init();
+
+  // Current Role "Present" button
+  document.getElementById('btnCurrentPresent')?.addEventListener('click', () => {
+    const endInp = document.getElementById('currentEndDate');
+    if (endInp) {
+      endInp.value = 'Present';
+      endInp.dispatchEvent(new Event('input', { bubbles: true }));
+      endInp.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  });
 
   // Theme Toggle
   document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);

@@ -113,6 +113,8 @@ JSON STRUCTURE REQUIRED:
     "address": "Street address or location line",
     "currentJobTitle": "Current or most recent job title (e.g. Senior Software Engineer)",
     "currentCompany": "Current or most recent company / employer (e.g. TechCorp Inc.)",
+    "currentStartDate": "Start date of current role (e.g. Jan 2022 or 2022-01) or empty string",
+    "currentEndDate": "End date of current role (e.g. Present) or empty string",
     "yearsOfExperience": "Total estimated years of experience as a number (e.g. 5)",
     "desiredSalary": "Expected/desired salary if mentioned or empty string",
     "experienceDescription": "Concise 2-3 sentence summary of key work accomplishments and roles",
@@ -136,7 +138,8 @@ JSON STRUCTURE REQUIRED:
       {
         "jobTitle": "Past job title (e.g. Software Engineer)",
         "company": "Company / Organization name",
-        "duration": "Dates or duration (e.g. 2020 – 2022)",
+        "startDate": "Start date (e.g. Jan 2020 or 2020-01)",
+        "endDate": "End date (e.g. Dec 2022)",
         "description": "Key responsibilities and technical accomplishments"
       }
     ]
