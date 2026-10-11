@@ -70,6 +70,14 @@
       regex: /(?:current|most[\s_-]?recent|present)[\s_-]?(?:company|employer|organization|workplace)|current[\s_-]?employer|company[\s_-]?name\b/i,
       inputTypes: ['text'],
     },
+    currentStartDate: {
+      regex: /(?:job|work|employment|role|position)?[\s_-]?(?:start[\s_-]?date|from[\s_-]?date|date[\s_-]?from|start[\s_-]?month|start[\s_-]?year|started)\b/i,
+      inputTypes: ['text', 'date', 'number'],
+    },
+    currentEndDate: {
+      regex: /(?:job|work|employment|role|position)?[\s_-]?(?:end[\s_-]?date|to[\s_-]?date|date[\s_-]?to|end[\s_-]?month|end[\s_-]?year|ended|until)\b/i,
+      inputTypes: ['text', 'date', 'number'],
+    },
     yearsOfExperience: {
       regex: /years?[\s_-]?(?:of[\s_-]?)?experience|experience[\s_-]?years?|total[\s_-]?experience|work[\s_-]?experience[\s_-]?years?/i,
       inputTypes: ['text', 'number'],
