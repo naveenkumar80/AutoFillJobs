@@ -4,6 +4,12 @@
  * custom Q&A knowledge base, and AI settings to chrome.storage.local
  */
 
+const Logger = window.QuickFillLogger || {
+  error: (src, err) => console.error(`[QuickFill:${src}]`, err),
+  warn: (src, msg) => console.warn(`[QuickFill:${src}]`, msg),
+  info: (src, msg) => console.log(`[QuickFill:${src}]`, msg),
+};
+
 // All profile field IDs — must match the HTML form input IDs
 const PROFILE_FIELDS = [
   // Personal Info
@@ -50,15 +56,23 @@ const PROFILE_FIELDS = [
 // Model options per provider (using verified official production model identifiers)
 const MODEL_OPTIONS = {
   gemini: [
-    { value: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash (Fastest & Latest)' },
-    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-    { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
-    { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
+    { value: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash (Flagship Fast & Agentic)' },
+    { value: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash (Fast Incremental)' },
+    { value: 'gemini-3-flash-preview', label: 'Gemini 3 Flash Preview' },
+    { value: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro Preview (Premium High Reasoning)' },
+    { value: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash Lite (Ultra-Low Cost)' },
+    { value: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash Lite (High Throughput)' },
+    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (Reliable & Fast Production)' },
+    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (Stable High Reasoning)' },
+    { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite (Lightweight)' },
+    { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash (Fast & Recommended)' },
+    { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash (Ultra-Reliable)' },
     { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro (Deep Reasoning)' },
   ],
   openai: [
     { value: 'gpt-4o-mini', label: 'GPT-4o Mini (Fast & Cheap)' },
     { value: 'gpt-4o', label: 'GPT-4o (Best Quality)' },
+    { value: 'o3-mini', label: 'o3-mini (High Reasoning)' },
   ],
 };
 
@@ -173,11 +187,7 @@ function populateForm(profile, aiSettings, customQA, savedResume) {
 
     const modelEl = document.getElementById('aiModel');
     if (modelEl && aiSettings.model) {
-      let modelVal = aiSettings.model;
-      if (modelVal === 'gemini-2.0-flash' || modelVal.includes('2.0') || modelVal.includes('2.5')) {
-        modelVal = 'gemini-3.8-flash';
-      }
-      modelEl.value = modelVal;
+      modelEl.value = aiSettings.model;
     }
 
     const apiKeyEl = document.getElementById('aiApiKey');
@@ -1463,6 +1473,7 @@ async function handleResumeUpload(file) {
     showToast(`Resume saved & imported! ${populatedCount || fastPopulatedCount} fields populated.`, 'success');
 
   } catch (err) {
+    Logger.error('options', err, { context: 'handleResumeUpload' });
     console.error('[Resume Parse Error]', err);
     if (fastPopulatedCount > 0) {
       statusEl.className = 'resume-status-box success';
@@ -1595,6 +1606,7 @@ function saveProfile(event) {
 
   chrome.storage.local.set(payload, () => {
     if (chrome.runtime.lastError) {
+      Logger.error('options', `Failed to save profile: ${chrome.runtime.lastError.message}`);
       showToast('Failed to save. ' + chrome.runtime.lastError.message, 'error');
     } else {
       showToast('Profile & Knowledge Base saved successfully!', 'success');
@@ -1668,9 +1680,11 @@ function showToast(message, type = 'success') {
   if (!toast) return;
 
   toast.className = `toast ${type} visible`;
-  toast.innerHTML = `<span>${type === 'success' ? '✓' : '✕'}</span><span>${escapeHtml(message)}</span>`;
+  const icon = type === 'success' ? '✓' : '✕';
+  toast.innerHTML = `<span class="toast-icon">${icon}</span><span>${escapeHtml(message)}</span>`;
 
-  setTimeout(() => {
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => {
     toast.classList.remove('visible');
   }, 3500);
 }
@@ -1719,22 +1733,39 @@ async function testAIConnection() {
   try {
     const aiSettings = gatherAISettings();
     let response;
-    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-      response = await chrome.runtime.sendMessage({
+
+    // 1. Prefer direct in-page execution via window.QuickFillAIService (instant ~300ms, zero IPC/service worker latency)
+    if (window.QuickFillAIService && typeof window.QuickFillAIService.testConnection === 'function') {
+      response = await window.QuickFillAIService.testConnection(aiSettings);
+    } else if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+      // 2. Background service worker fallback with 20s watchdog
+      const sendPromise = chrome.runtime.sendMessage({
         action: 'TEST_AI',
         aiSettings,
       });
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Connection ping timed out. Please check your internet connection or proxy settings.')), 20000)
+      );
+      response = await Promise.race([sendPromise, timeoutPromise]);
     } else {
-      // Direct fetch fallback for local browser testing
+      // 3. Direct fetch fallback for standalone testing
       const cleanKey = apiKey.replace(/^["']|["']$/g, '');
-      const testModel = model || 'gemini-3.8-flash';
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${testModel}:generateContent?key=${cleanKey}`;
+      const testModel = (model || (provider === 'gemini' ? 'gemini-3.8-flash' : 'gpt-4o-mini')).replace(/^models\//, '');
       const startT = Date.now();
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: 'Respond with JSON {"status":"ok"}' }] }] }),
-      });
+      let res;
+      if (provider === 'openai') {
+        res = await fetch('https://api.openai.com/v1/models', {
+          method: 'GET',
+          headers: { 'Authorization': `Bearer ${cleanKey}` },
+          signal: AbortSignal.timeout(8000),
+        });
+      } else {
+        res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${cleanKey}`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(8000),
+        });
+      }
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData?.error?.message || `HTTP ${res.status}`);
@@ -1746,13 +1777,14 @@ async function testAIConnection() {
       throw new Error(response.error);
     }
 
+    // Display result cleanly in the inline status box directly under the input
     resultEl.className = 'resume-status-box success';
-    resultEl.innerHTML = `<span><strong>Connection verified!</strong> Model <code>${escapeHtml(response.model || model)}</code> responded in ${response.elapsed || 0}ms.</span>`;
-    showToast('AI connection verified', 'success');
+    const noteText = response?.note ? ` <small style="display:inline-block; margin-top:2px; opacity:0.9;">${escapeHtml(response.note)}</small>` : '';
+    resultEl.innerHTML = `<span><strong>Connection verified!</strong> Model <code>${escapeHtml(response?.model || model)}</code> responded in ${response?.elapsed || 0}ms.${noteText}</span>`;
   } catch (err) {
+    Logger.error('options', `AI Connection Test failed: ${err.message}`, { error: err });
     resultEl.className = 'resume-status-box error';
     resultEl.innerHTML = `<span><strong>Connection failed:</strong> ${escapeHtml(err.message)}</span>`;
-    showToast('AI test failed: ' + err.message, 'error');
   } finally {
     btn.disabled = false;
     btn.textContent = 'Test Connection';

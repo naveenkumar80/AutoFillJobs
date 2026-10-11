@@ -32,6 +32,8 @@
         "scripts/logger.js",
         "scripts/dom-filler.js",
         "scripts/field-matcher.js",
+        "scripts/ai-filler.js",
+        "scripts/form-engine.js",
         "content.js"
       ],
       "all_frames": true,

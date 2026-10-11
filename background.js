@@ -9,6 +9,7 @@
 
 importScripts(
   'scripts/logger.js',
+  'scripts/field-matcher.js',
   'scripts/ai-service.js',
   'scripts/resume-parser.js'
 );
@@ -88,6 +89,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .then(() => sendResponse({ success: true }))
       .catch((err) => sendResponse({ error: err.message }));
     return true;
+  }
+
+  // 7. Rate Limiter Stats
+  if (action === 'GET_RATE_LIMIT_STATS') {
+    const quota = AIService.rateLimiter ? AIService.rateLimiter.getRemainingQuota() : 14;
+    sendResponse({ remaining: quota, max: 14 });
+    return false;
   }
 
   return false;

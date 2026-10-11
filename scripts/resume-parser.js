@@ -172,7 +172,6 @@ Return ONLY this JSON object.`;
 
             if (provider === 'gemini') {
               let geminiModel = model || 'gemini-3.8-flash';
-              if (geminiModel.includes('2.0')) geminiModel = 'gemini-3.8-flash';
 
               if (base64Pdf && (mimeType === 'application/pdf' || !mimeType)) {
                 try {

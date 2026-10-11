@@ -481,6 +481,49 @@
         return profile?.eeoRace || 'Decline to self-identify';
       }
 
+      // Expected Salary / Compensation
+      if (/(?:salary|compensation)[\s_-]?(?:expectation|desired|requirement|target)|expected[\s_-]?salary/i.test(text)) {
+        return profile?.desiredSalary || 'Open to discussion';
+      }
+
+      // Work authorization / Sponsorship
+      if (/(?:authorized|legally[\s_-]?authorized|eligible)[\s_-]?to[\s_-]?work/i.test(text)) {
+        return profile?.authorizedToWork || 'Yes';
+      }
+      if (/(?:require|need)[\s_-]?(?:visa[\s_-]?)?sponsorship/i.test(text)) {
+        return profile?.requiresSponsorship || 'No';
+      }
+
+      // Referral / Source (How did you hear about us)
+      if (/(?:how[\s_-]?did[\s_-]?you[\s_-]?(?:hear|find|learn)[\s_-]?(?:about|of)|referral[\s_-]?source|where[\s_-]?did[\s_-]?you[\s_-]?(?:see|hear))/i.test(text)) {
+        return 'LinkedIn';
+      }
+
+      // Felony / Criminal record
+      if (/(?:convicted[\s_-]?of[\s_-]?(?:a[\s_-]?)?felony|criminal[\s_-]?record|felony[\s_-]?conviction)/i.test(text)) {
+        return 'No';
+      }
+
+      // Perform essential functions
+      if (/(?:perform[\s_-]?(?:the[\s_-]?)?essential[\s_-]?functions|reasonable[\s_-]?accommodation)/i.test(text)) {
+        return 'Yes';
+      }
+
+      // Earliest start date
+      if (/(?:earliest|available|can[\s_-]?you)[\s_-]?start[\s_-]?date|availability[\s_-]?to[\s_-]?start/i.test(text)) {
+        return profile?.earliestStartDate || 'Immediately';
+      }
+
+      // Notice period
+      if (/notice[\s_-]?period/i.test(text)) {
+        return profile?.noticePeriod || '2 weeks';
+      }
+
+      // Work arrangement preference (Remote / Hybrid / On-site)
+      if (/(?:work[\s_-]?(?:arrangement|preference|style|environment)|remote[\s_-]?or[\s_-]?hybrid)/i.test(text)) {
+        return profile?.workPreference || 'Hybrid';
+      }
+
       return null;
     },
   };

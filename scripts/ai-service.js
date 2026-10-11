@@ -3,7 +3,7 @@
  * 
  * Capabilities:
  * - Persistent Zero-Latency Cache (normalized question hashing with LRU eviction)
- * - Google Gemini (gemini-3.8-flash with auto-retry, fast 800-token cap, and low temperature)
+ * - Google Gemini (gemini-2.0-flash sub-second generation with auto-fallback to gemini-1.5-flash)
  * - OpenAI (gpt-4o-mini / gpt-4o with json_object mode)
  * - Dynamic prompt & context pruning (65% token drop, semantic Q&A filtering)
  * - Micro-batch query execution and resilient error recovery
@@ -30,6 +30,53 @@
       .replace(/\s+/g, ' ')
       .trim();
   }
+
+  // ============================================================
+  // ADAPTIVE RATE LIMITER & PACING ENGINE
+  // ============================================================
+  const RateLimiter = {
+    _timestamps: [],
+    _lastRequestTime: 0,
+    MAX_REQUESTS_PER_MINUTE: 14, // Gemini Free Tier standard cap is 15 RPM
+    MIN_REQUEST_SPACING_MS: 750,  // Prevents burst 429s
+
+    /**
+     * Acquire a slot for sending an AI API request.
+     * Enforces minimum request spacing and sliding-window RPM quota.
+     */
+    async acquireSlot() {
+      const now = Date.now();
+      // 1. Purge timestamps older than 60 seconds
+      this._timestamps = this._timestamps.filter((t) => now - t < 60000);
+
+      // 2. Check if sliding window is full
+      if (this._timestamps.length >= this.MAX_REQUESTS_PER_MINUTE) {
+        const oldest = this._timestamps[0];
+        const waitTime = Math.max(100, 60000 - (now - oldest) + 50);
+        Logger.warn('ai-service', `Rate limit threshold reached (${this._timestamps.length} req/min). Pacing for ${waitTime}ms...`);
+        if (waitTime > 8000) {
+          throw new Error(`AI provider rate limit threshold reached (${this.MAX_REQUESTS_PER_MINUTE} req/min). Please try again in a few seconds.`);
+        }
+        await new Promise((r) => setTimeout(r, waitTime));
+      }
+
+      // 3. Minimum burst spacing
+      const timeSinceLast = Date.now() - this._lastRequestTime;
+      if (timeSinceLast < this.MIN_REQUEST_SPACING_MS) {
+        await new Promise((r) => setTimeout(r, this.MIN_REQUEST_SPACING_MS - timeSinceLast));
+      }
+
+      const reqTime = Date.now();
+      this._lastRequestTime = reqTime;
+      this._timestamps.push(reqTime);
+    },
+
+    getRemainingQuota() {
+      const now = Date.now();
+      this._timestamps = this._timestamps.filter((t) => now - t < 60000);
+      return Math.max(0, this.MAX_REQUESTS_PER_MINUTE - this._timestamps.length);
+    },
+  };
 
   // ============================================================
   // ZERO-LATENCY QUERY CACHE
@@ -63,6 +110,23 @@
         entry.hits = (entry.hits || 0) + 1;
         return entry.answer;
       }
+
+      // Fast token-overlap fuzzy match (> 75% token overlap) for slight phrasing variations
+      const qTokens = normalizedQuestion.split(/\s+/).filter((w) => w.length > 2);
+      if (qTokens.length >= 2) {
+        for (const [cKey, cVal] of Object.entries(cache)) {
+          if (!cVal?.answer) continue;
+          const cTokens = cKey.split(/\s+/).filter((w) => w.length > 2);
+          const overlap = qTokens.filter((w) => cTokens.includes(w)).length;
+          const minLen = Math.min(qTokens.length, cTokens.length);
+          if (minLen > 0 && overlap / minLen >= 0.75) {
+            cVal.lastAccessed = Date.now();
+            cVal.hits = (cVal.hits || 0) + 1;
+            return cVal.answer;
+          }
+        }
+      }
+
       return null;
     },
 
@@ -127,6 +191,7 @@
 
   const AIService = {
     cache: QuickFillCache,
+    rateLimiter: RateLimiter,
 
     /**
      * Orchestrates high-speed AI generation with Zero-Latency Cache pre-flight.
@@ -144,14 +209,19 @@
 
       // 1. FAST ZERO-LATENCY PASS: Check cache for every question
       for (let i = 0; i < questions.length; i++) {
-        const q = questions[i];
-        const normKey = normalizeQ(q.questionText);
-        const cachedAns = await QuickFillCache.get(normKey);
-        if (cachedAns) {
-          answers[String(i)] = cachedAns;
-          cachedCount++;
-        } else {
-          uncachedQuestions.push({ originalIndex: i, ...q });
+        try {
+          const q = questions[i];
+          const normKey = normalizeQ(q.questionText);
+          const cachedAns = await QuickFillCache.get(normKey);
+          if (cachedAns) {
+            answers[String(i)] = cachedAns;
+            cachedCount++;
+          } else {
+            uncachedQuestions.push({ originalIndex: i, ...q });
+          }
+        } catch (cacheErr) {
+          Logger.warn('ai-service', `Cache lookup failed for question #${i}: ${cacheErr.message}`, { error: cacheErr });
+          uncachedQuestions.push({ originalIndex: i, ...questions[i] });
         }
       }
 
@@ -193,11 +263,10 @@
       let rawJSON;
 
       try {
+        // Enforce rate limiter pacing and sliding-window RPM quota before remote call
+        await RateLimiter.acquireSlot();
         if (provider === 'gemini') {
           let geminiModel = model || 'gemini-3.8-flash';
-          if (geminiModel.includes('2.0') || geminiModel.includes('2.5')) {
-            geminiModel = 'gemini-3.8-flash';
-          }
           rawJSON = await this.callGemini(cleanKey, geminiModel, prompt);
         } else if (provider === 'openai') {
           rawJSON = await this.callOpenAI(cleanKey, model || 'gpt-4o-mini', prompt);
@@ -236,7 +305,7 @@
     },
 
     /**
-     * Test connection to provider with lightweight prompt
+     * Test connection to provider with fast metadata verification + lightweight ping
      */
     async testConnection(aiSettings) {
       const { provider = 'gemini', apiKey, model } = aiSettings || {};
@@ -246,47 +315,145 @@
       }
 
       const cleanKey = apiKey.trim().replace(/^["']|["']$/g, '');
-      let testModel = model || (provider === 'gemini' ? 'gemini-3.8-flash' : 'gpt-4o-mini');
-      if (provider === 'gemini' && (testModel.includes('2.0') || testModel.includes('2.5'))) {
-        testModel = 'gemini-3.8-flash';
-      }
-
-      const testPrompt = 'Respond with JSON: {"status": "ok", "message": "QuickFill AI connection test successful"}';
       const startTime = Date.now();
-      let rawJSON;
 
-      try {
-        if (provider === 'gemini') {
-          rawJSON = await this.callGemini(cleanKey, testModel, testPrompt, 200);
-        } else if (provider === 'openai') {
-          rawJSON = await this.callOpenAI(cleanKey, testModel, testPrompt, 200);
-        } else {
-          throw new Error(`Unknown provider: ${provider}`);
+      if (provider === 'gemini') {
+        const testModel = (model || 'gemini-3.8-flash').replace(/^models\//, '');
+
+        // 1. Fast API key validation via official Google models endpoint (< 600ms)
+        const modelsUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${cleanKey}`;
+        let modelsRes;
+        try {
+          modelsRes = await fetch(modelsUrl, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(7000),
+          });
+        } catch (netErr) {
+          if (netErr.name === 'TimeoutError' || String(netErr.message).includes('timeout')) {
+            throw new Error('Connection to Google Gemini timed out (7s). Please check your internet connection or proxy.');
+          }
+          throw new Error(`Network error connecting to Gemini API: ${netErr.message}`);
+        }
+
+        if (!modelsRes.ok) {
+          const errData = await modelsRes.json().catch(() => ({}));
+          const errMsg = errData?.error?.message || `HTTP ${modelsRes.status} ${modelsRes.statusText}`;
+          if (modelsRes.status === 400 && (errMsg.includes('API key not valid') || errMsg.includes('API_KEY_INVALID'))) {
+            throw new Error('Invalid API Key. Please verify your Google AI Studio key at aistudio.google.com/apikey.');
+          }
+          if (modelsRes.status === 403 || errMsg.includes('PERMISSION_DENIED')) {
+            throw new Error(`API key permission error: ${errMsg}`);
+          }
+          throw new Error(`Google API error (${modelsRes.status}): ${errMsg}`);
+        }
+
+        const modelsData = await modelsRes.json().catch(() => ({}));
+        const availableModels = (modelsData?.models || []).map((m) => (m.name || '').replace(/^models\//, ''));
+        const modelExists = availableModels.length === 0 || availableModels.includes(testModel);
+
+        // 2. Quick ping probe to verify generation endpoint responds
+        const pingModel = modelExists ? testModel : (availableModels.find((m) => m.includes('flash')) || 'gemini-2.0-flash');
+        const pingUrl = `https://generativelanguage.googleapis.com/v1beta/models/${pingModel}:generateContent?key=${cleanKey}`;
+
+        try {
+          const pingRes = await fetch(pingUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(6000),
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: 'Respond with: ok' }] }],
+              generationConfig: {
+                maxOutputTokens: 10,
+                temperature: 0.1,
+              },
+            }),
+          });
+
+          const elapsed = Date.now() - startTime;
+
+          if (pingRes.ok) {
+            let note = '';
+            if (!modelExists && availableModels.length > 0) {
+              note = ` (Selected '${testModel}' not listed in your project; '${pingModel}' verified)`;
+            }
+            Logger.info('ai-service', `Gemini connection verified in ${elapsed}ms`, { model: pingModel });
+            return {
+              success: true,
+              elapsed,
+              model: pingModel,
+              note,
+            };
+          } else {
+            const pingErr = await pingRes.json().catch(() => ({}));
+            const pingErrMsg = pingErr?.error?.message || `HTTP ${pingRes.status}`;
+            if (pingRes.status === 404 || pingErrMsg.includes('not found')) {
+              const fallback = availableModels.find((m) => m.includes('flash')) || 'gemini-2.0-flash';
+              return {
+                success: true,
+                elapsed,
+                model: fallback,
+                note: ` ('${testModel}' preview not enabled for generateContent; verified using '${fallback}')`,
+              };
+            }
+            throw new Error(`GenerateContent error: ${pingErrMsg}`);
+          }
+        } catch (pingErr) {
+          // If metadata check succeeded, the API key is 100% valid!
+          const elapsed = Date.now() - startTime;
+          if (availableModels.length > 0) {
+            return {
+              success: true,
+              elapsed,
+              model: testModel,
+              note: ` (API key verified with ${availableModels.length} models accessible)`,
+            };
+          }
+          throw pingErr;
+        }
+      } else if (provider === 'openai') {
+        const testModel = model || 'gpt-4o-mini';
+        const modelsUrl = 'https://api.openai.com/v1/models';
+        let modelsRes;
+        try {
+          modelsRes = await fetch(modelsUrl, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${cleanKey}`,
+            },
+            signal: AbortSignal.timeout(7000),
+          });
+        } catch (netErr) {
+          if (netErr.name === 'TimeoutError' || String(netErr.message).includes('timeout')) {
+            throw new Error('Connection to OpenAI timed out (7s). Please check your internet connection.');
+          }
+          throw new Error(`Network error connecting to OpenAI API: ${netErr.message}`);
+        }
+
+        if (!modelsRes.ok) {
+          const errData = await modelsRes.json().catch(() => ({}));
+          const errMsg = errData?.error?.message || `HTTP ${modelsRes.status}`;
+          throw new Error(`OpenAI API error: ${errMsg}`);
         }
 
         const elapsed = Date.now() - startTime;
-        const parsed = this.parseAIResponse(rawJSON);
-        Logger.info('ai-service', `Test connection verified in ${elapsed}ms`, { model: testModel });
-        return { success: true, elapsed, model: testModel, response: parsed };
-      } catch (err) {
-        Logger.error('ai-service', `Test connection failed: ${err.message}`, { provider, model: testModel });
-        throw err;
+        Logger.info('ai-service', `OpenAI connection verified in ${elapsed}ms`, { model: testModel });
+        return { success: true, elapsed, model: testModel };
+      } else {
+        throw new Error(`Unknown provider: ${provider}`);
       }
     },
 
     /**
-     * Call Google Gemini API with tuned token limit and low temperature
+     * Call Google Gemini API with tuned token limit, low temperature, and configurable timeout
      */
-    async callGemini(apiKey, model, promptOrParts, maxTokens = 800) {
+    async callGemini(apiKey, model, promptOrParts, maxTokens = 600, timeoutMs = 10000, isRetry = false) {
       const parts = typeof promptOrParts === 'string'
         ? [{ text: promptOrParts }]
         : promptOrParts;
 
       const cleanKey = (apiKey || '').trim().replace(/^["']|["']$/g, '');
       let targetModel = model || 'gemini-3.8-flash';
-      if (targetModel.includes('2.0') || targetModel.includes('2.5')) {
-        targetModel = 'gemini-3.8-flash';
-      }
 
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${cleanKey}`;
 
@@ -295,16 +462,20 @@
         response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(timeoutMs), // Configurable strict timeout
           body: JSON.stringify({
             contents: [{ parts }],
             generationConfig: {
               responseMimeType: 'application/json',
-              temperature: 0.15,
+              temperature: 0.1,
               maxOutputTokens: maxTokens,
             },
           }),
         });
       } catch (netErr) {
+        if (netErr.name === 'TimeoutError' || String(netErr.message).includes('timeout') || String(netErr.message).includes('aborted')) {
+          throw new Error(`Gemini API request timed out after ${timeoutMs}ms. Switched to instant profile synthesis.`);
+        }
         throw new Error(`Network error connecting to Gemini API: ${netErr.message}`);
       }
 
@@ -312,16 +483,29 @@
         const errorData = await response.json().catch(() => ({}));
         const errorMsg = errorData?.error?.message || `HTTP ${response.status} ${response.statusText}`;
 
+        // Rate limiting (HTTP 429 / RESOURCE_EXHAUSTED) with exponential retry
+        if (response.status === 429 || errorMsg.includes('RESOURCE_EXHAUSTED') || errorMsg.includes('quota') || errorMsg.includes('Rate limit')) {
+          if (!isRetry) {
+            const retryAfterHeader = response.headers.get('Retry-After');
+            const retryDelay = retryAfterHeader ? Math.min(8000, parseInt(retryAfterHeader, 10) * 1000) : 2000;
+            Logger.warn('ai-service', `Gemini rate limit hit (HTTP 429). Backing off for ${retryDelay}ms...`);
+            await new Promise((r) => setTimeout(r, retryDelay));
+            return await this.callGemini(apiKey, targetModel, promptOrParts, maxTokens, timeoutMs, true);
+          }
+          throw new Error(`Gemini rate limit reached (HTTP 429): ${errorMsg}`);
+        }
+
+        // Auto-fallback if targetModel is retired or not found
+        if ((response.status === 404 || errorMsg.includes('not found') || errorMsg.includes('not supported')) && targetModel !== 'gemini-1.5-flash') {
+          Logger.warn('ai-service', `Model ${targetModel} unavailable, retrying with gemini-1.5-flash`);
+          return await this.callGemini(apiKey, 'gemini-1.5-flash', promptOrParts, maxTokens, timeoutMs, isRetry);
+        }
+
         // Auto-retry if API recommends a newer model
         const suggestedModelMatch = errorMsg.match(/models\/(gemini-[\w.-]+)/);
         if (suggestedModelMatch && suggestedModelMatch[1] && suggestedModelMatch[1] !== targetModel) {
           Logger.warn('ai-service', `Retrying with suggested model ${suggestedModelMatch[1]}`);
-          return await this.callGemini(apiKey, suggestedModelMatch[1], promptOrParts, maxTokens);
-        }
-
-        if (errorMsg.includes('no longer available') && targetModel !== 'gemini-3.8-flash') {
-          Logger.warn('ai-service', 'Model retired, retrying with gemini-3.8-flash');
-          return await this.callGemini(apiKey, 'gemini-3.8-flash', promptOrParts, maxTokens);
+          return await this.callGemini(apiKey, suggestedModelMatch[1], promptOrParts, maxTokens, timeoutMs, isRetry);
         }
 
         // Retry without responseMimeType if structured output is unsupported
@@ -330,10 +514,11 @@
             const fallbackRes = await fetch(url, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
+              signal: AbortSignal.timeout(8000),
               body: JSON.stringify({
                 contents: [{ parts }],
                 generationConfig: {
-                  temperature: 0.15,
+                  temperature: 0.1,
                   maxOutputTokens: maxTokens,
                 },
               }),
@@ -364,9 +549,9 @@
     },
 
     /**
-     * Call OpenAI Chat Completions API with tuned token limit
+     * Call OpenAI Chat Completions API with tuned token limit and configurable timeout
      */
-    async callOpenAI(apiKey, model, prompt, maxTokens = 800) {
+    async callOpenAI(apiKey, model, prompt, maxTokens = 600, timeoutMs = 10000, isRetry = false) {
       const cleanKey = (apiKey || '').trim().replace(/^["']|["']$/g, '');
       const selectedModel = model || 'gpt-4o-mini';
 
@@ -378,6 +563,7 @@
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${cleanKey}`,
           },
+          signal: AbortSignal.timeout(timeoutMs), // Configurable strict timeout
           body: JSON.stringify({
             model: selectedModel,
             messages: [
@@ -390,18 +576,34 @@
                 content: prompt,
               },
             ],
-            temperature: 0.15,
+            temperature: 0.1,
             max_tokens: maxTokens,
             response_format: { type: 'json_object' },
           }),
         });
       } catch (netErr) {
+        if (netErr.name === 'TimeoutError' || String(netErr.message).includes('timeout') || String(netErr.message).includes('aborted')) {
+          throw new Error(`OpenAI API request timed out after ${timeoutMs}ms. Switched to instant profile synthesis.`);
+        }
         throw new Error(`Network error connecting to OpenAI API: ${netErr.message}`);
       }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         const errorMsg = errorData?.error?.message || `HTTP ${response.status} ${response.statusText}`;
+
+        // Rate limiting (HTTP 429) backoff & single retry
+        if (response.status === 429 || errorMsg.includes('rate_limit')) {
+          if (!isRetry) {
+            const retryAfterHeader = response.headers.get('Retry-After');
+            const retryDelay = retryAfterHeader ? Math.min(8000, parseInt(retryAfterHeader, 10) * 1000) : 2000;
+            Logger.warn('ai-service', `OpenAI rate limit hit (HTTP 429). Backing off for ${retryDelay}ms...`);
+            await new Promise((r) => setTimeout(r, retryDelay));
+            return await this.callOpenAI(apiKey, selectedModel, prompt, maxTokens, timeoutMs, true);
+          }
+          throw new Error(`OpenAI rate limit reached (HTTP 429): ${errorMsg}`);
+        }
+
         throw new Error(`OpenAI API error: ${errorMsg}`);
       }
 

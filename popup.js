@@ -174,6 +174,8 @@ async function handleFill() {
           'scripts/logger.js',
           'scripts/dom-filler.js',
           'scripts/field-matcher.js',
+          'scripts/ai-filler.js',
+          'scripts/form-engine.js',
           'content.js',
         ],
       });
@@ -181,12 +183,11 @@ async function handleFill() {
       console.log('Injection note:', injectionError.message);
     }
 
-    // Execute fill across all frames simultaneously via executeScript
-    // This aggregates all frames and completely eliminates single-frame race conditions
+    // Execute fill: top frame first (fast path for 95%+ of job portals)
     let results = [];
     try {
       results = await chrome.scripting.executeScript({
-        target: { tabId: tab.id, allFrames: true },
+        target: { tabId: tab.id },
         func: async (useAI) => {
           if (typeof window.executeQuickFill === 'function') {
             return await window.executeQuickFill(useAI);
@@ -195,6 +196,24 @@ async function handleFill() {
         },
         args: [useAI],
       });
+
+      // If top frame had no fields, check subframes for embedded application iframes
+      const topFound = results?.[0]?.result?.fieldsFound || 0;
+      if (topFound === 0) {
+        const subResults = await chrome.scripting.executeScript({
+          target: { tabId: tab.id, allFrames: true },
+          func: async (useAI) => {
+            if (window !== window.top && typeof window.executeQuickFill === 'function') {
+              return await window.executeQuickFill(useAI);
+            }
+            return null;
+          },
+          args: [useAI],
+        });
+        if (subResults && subResults.length > 0) {
+          results = subResults;
+        }
+      }
     } catch (execError) {
       console.warn('executeScript failed, will try sendMessage fallback:', execError);
     }
