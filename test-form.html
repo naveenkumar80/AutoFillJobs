@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sample Job Application — QuickFill Test Playground</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --border: #334155;
+      --primary: #3b82f6;
+      --accent-purple: #a855f7;
+      --radius: 8px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 40px 20px;
+      line-height: 1.5;
+    }
+    .container {
+      max-width: 760px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 32px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 20px;
+      margin-bottom: 24px;
+    }
+    .header h1 { font-size: 24px; color: #fff; margin-bottom: 6px; }
+    .header p { color: var(--text-muted); font-size: 14px; }
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      color: #60a5fa;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-top: 8px;
+    }
+    .section-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #cbd5e1;
+      margin: 24px 0 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .section-title.ai-title {
+      color: #d8b4fe;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .full-width { grid-column: 1 / -1; }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    label {
+      font-size: 13px;
+      font-weight: 500;
+      color: #e2e8f0;
+    }
+    .required { color: #f87171; }
+    input[type="text"], input[type="email"], input[type="tel"], input[type="url"], select, textarea {
+      padding: 10px 12px;
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: #fff;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    }
+    textarea { min-height: 85px; resize: vertical; }
+    .radio-group {
+      display: flex;
+      gap: 18px;
+      margin-top: 4px;
+    }
+    .radio-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .radio-label input { cursor: pointer; }
+    .btn-submit {
+      margin-top: 28px;
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Senior Full-Stack Engineer Application</h1>
+      <p>TechCorp Inc. &bull; San Francisco, CA (Remote & Hybrid Eligible)</p>
+      <span class="badge">🧪 Test Form for Job Application QuickFill</span>
+    </div>
+
+    <form id="jobAppForm" onsubmit="event.preventDefault(); alert('Application Submitted (Demo)!');">
+      <!-- 1. Basic & Contact Information -->
+      <div class="section-title">👤 Basic Information (Profile Auto-Fill)</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="first_name">First Name <span class="required">*</span></label>
+          <input type="text" id="first_name" name="first_name" placeholder="First Name" required />
+        </div>
+        <div class="form-group">
+          <label for="last_name">Last Name <span class="required">*</span></label>
+          <input type="text" id="last_name" name="last_name" placeholder="Last Name" required />
+        </div>
+        <div class="form-group">
+          <label for="email">Email <span class="required">*</span></label>
+          <input type="email" id="email" name="email" placeholder="you@example.com" required />
+        </div>
+        <div class="form-group">
+          <label for="phone">Phone Number <span class="required">*</span></label>
+          <input type="tel" id="phone" name="phone" placeholder="+1 (555) 000-0000" />
+        </div>
+        <div class="form-group full-width">
+          <label for="city">City / Location</label>
+          <input type="text" id="city" name="city" placeholder="e.g. San Francisco, CA" />
+        </div>
+        <div class="form-group full-width">
+          <label for="resume">Resume / CV Document <span class="required">*</span></label>
+          <input type="file" id="resume" name="resume" accept=".pdf,.doc,.docx" required />
+          <span style="font-size: 11px; color: var(--text-muted);">PDF, DOCX, or TXT resume file</span>
+        </div>
+      </div>
+
+      <!-- 2. Work Experience -->
+      <div class="section-title">💼 Work Experience</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="current_job_title">Current / Recent Job Title</label>
+          <input type="text" id="current_job_title" name="current_job_title" placeholder="e.g. Senior Software Engineer" />
+        </div>
+        <div class="form-group">
+          <label for="current_company">Current / Recent Employer</label>
+          <input type="text" id="current_company" name="current_company" placeholder="e.g. TechCorp Inc." />
+        </div>
+        <div class="form-group">
+          <label for="years_of_experience">Total Years of Experience</label>
+          <input type="text" id="years_of_experience" name="years_of_experience" placeholder="e.g. 5" />
+        </div>
+        <div class="form-group">
+          <label for="salary_expectations">Desired / Expected Salary</label>
+          <input type="text" id="salary_expectations" name="salary_expectations" placeholder="e.g. $140,000 / year or Open" />
+        </div>
+        <div class="form-group full-width">
+          <label for="work_experience_summary">Experience Summary &amp; Accomplishments</label>
+          <textarea id="work_experience_summary" name="work_experience_summary" placeholder="Summary of responsibilities and key achievements..."></textarea>
+        </div>
+      </div>
+
+      <!-- 3. Education -->
+      <div class="section-title">🎓 Education</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="education_level">Highest Education Level Completed</label>
+          <select id="education_level" name="education_level">
+            <option value="">Select education</option>
+            <option value="High School">High School</option>
+            <option value="Associate Degree">Associate Degree</option>
+            <option value="Bachelor's Degree">Bachelor's Degree</option>
+            <option value="Master's Degree">Master's Degree</option>
+            <option value="Ph.D. / Doctorate">Ph.D. / Doctorate</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="university_name">University / College</label>
+          <input type="text" id="university_name" name="university_name" placeholder="e.g. University of California, Berkeley" />
+        </div>
+        <div class="form-group">
+          <label for="major_field">Major / Field of Study</label>
+          <input type="text" id="major_field" name="major_field" placeholder="e.g. Computer Science" />
+        </div>
+        <div class="form-group">
+          <label for="graduation_year">Graduation Year</label>
+          <input type="text" id="graduation_year" name="graduation_year" placeholder="e.g. 2021" />
+        </div>
+        <div class="form-group full-width">
+          <label for="gpa">GPA</label>
+          <input type="text" id="gpa" name="gpa" placeholder="e.g. 3.8 / 4.0" />
+        </div>
+      </div>
+
+      <!-- 4. Skills & Certifications -->
+      <div class="section-title">📜 Skills &amp; Certifications</div>
+      <div class="form-grid">
+        <div class="form-group full-width">
+          <label for="skills">Technical Skills</label>
+          <textarea id="skills" name="skills" placeholder="e.g. TypeScript, JavaScript, React, Node.js, Python, AWS, Docker"></textarea>
+        </div>
+        <div class="form-group full-width">
+          <label for="certifications">Certifications &amp; Licenses</label>
+          <textarea id="certifications" name="certifications" placeholder="e.g. AWS Certified Solutions Architect, CKA, PMP"></textarea>
+        </div>
+      </div>
+
+      <!-- 5. Professional Links -->
+      <div class="section-title">🔗 Professional Links</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="linkedin_url">LinkedIn URL</label>
+          <input type="url" id="linkedin_url" name="linkedin_url" placeholder="https://linkedin.com/in/..." />
+        </div>
+        <div class="form-group">
+          <label for="github_url">GitHub URL</label>
+          <input type="url" id="github_url" name="github_url" placeholder="https://github.com/..." />
+        </div>
+        <div class="form-group full-width">
+          <label for="portfolio_url">Portfolio / Personal Website</label>
+          <input type="url" id="portfolio_url" name="portfolio_url" placeholder="https://yourwebsite.dev" />
+        </div>
+      </div>
+
+      <!-- 6. Work Authorization & Preferences -->
+      <div class="section-title">🛂 Work Authorization &amp; Preferences</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="work_auth">Legally authorized to work in the country?</label>
+          <select id="work_auth" name="work_auth">
+            <option value="">Select an option</option>
+            <option value="Yes">Yes</option>
+            <option value="No">No</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="sponsorship">Will you now or in the future require visa sponsorship?</label>
+          <select id="sponsorship" name="sponsorship">
+            <option value="">Select an option</option>
+            <option value="No">No</option>
+            <option value="Yes">Yes</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="start_date">Earliest Available Start Date</label>
+          <input type="text" id="start_date" name="start_date" placeholder="e.g. Immediately or 2 weeks" />
+        </div>
+        <div class="form-group">
+          <label for="notice_period">Notice Period</label>
+          <input type="text" id="notice_period" name="notice_period" placeholder="e.g. 2 weeks" />
+        </div>
+        <div class="form-group full-width">
+          <label>Work arrangement preference</label>
+          <div class="radio-group">
+            <label class="radio-label">
+              <input type="radio" name="hybrid_preference" value="Remote" /> Remote
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="hybrid_preference" value="Hybrid" /> Hybrid
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="hybrid_preference" value="On-site" /> On-site
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- 7. Custom Questions (AI Auto-Fill) -->
+      <div class="section-title ai-title">🤖 Custom Questions (AI Auto-Fill)</div>
+      <div class="form-grid">
+        <div class="form-group full-width">
+          <label for="why_role">Why are you interested in joining our engineering team? <span class="required">*</span></label>
+          <textarea id="why_role" name="why_role" placeholder="Tell us why you want to work here..."></textarea>
+        </div>
+        <div class="form-group full-width">
+          <label for="tech_problem">Describe a challenging technical problem you solved recently and your approach. <span class="required">*</span></label>
+          <textarea id="tech_problem" name="tech_problem" placeholder="Describe the problem, technologies used, and resolution..."></textarea>
+        </div>
+      </div>
+
+      <button type="submit" class="btn-submit">Submit Application</button>
+    </form>
+  </div>
+</body>
+</html>

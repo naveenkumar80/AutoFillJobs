@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QuickFill — Profile &amp; Settings</title>
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <!-- Vercel-Style Global Navbar -->
+  <header class="navbar">
+    <div class="navbar-inner">
+      <div class="brand">
+        <div class="brand-logo" title="QuickFill Engine">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+        </div>
+        <div class="brand-breadcrumbs">
+          <span class="brand-name">QuickFill</span>
+          <span class="brand-separator">/</span>
+          <span class="brand-badge">Settings</span>
+        </div>
+      </div>
+      <div class="navbar-actions">
+        <div class="navbar-status">
+          <span class="status-dot"></span>
+          <span>Extension Active</span>
+        </div>
+        <button type="button" class="btn-theme-toggle" id="themeToggle" title="Toggle Theme (Dark / Light)" aria-label="Toggle Theme">
+          <svg class="theme-icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+          <svg class="theme-icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
+        <button type="submit" form="profileForm" class="btn-primary-vercel" id="btnTopSave">
+          <span>Save Changes</span>
+          <kbd class="kbd-shortcut">Ctrl+S</kbd>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Segmented Sub-Navigation Tabs -->
+  <nav class="nav-tabs" aria-label="Settings Sections">
+    <div class="nav-tabs-inner">
+      <a href="#section-resume" class="tab-link active">Resume Import</a>
+      <a href="#section-personal" class="tab-link">Personal Details</a>
+      <a href="#section-experience" class="tab-link">Work Experience</a>
+      <a href="#section-education" class="tab-link">Education</a>
+      <a href="#section-skills" class="tab-link">Skills &amp; Tech</a>
+      <a href="#section-preferences" class="tab-link">Work Preferences</a>
+      <a href="#section-knowledge-base" class="tab-link">Knowledge Base</a>
+      <a href="#section-ai" class="tab-link">AI Engine</a>
+      <a href="#section-logs" class="tab-link">Diagnostics</a>
+    </div>
+  </nav>
+
+  <!-- Main Container -->
+  <main class="page-container">
+    <form id="profileForm" autocomplete="off">
+      
+      <!-- Section: Resume Quick Import -->
+      <section class="card" id="section-resume">
+        <div class="card-header">
+          <div class="card-header-left">
+            <div class="card-icon-box">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+              </svg>
+            </div>
+            <div class="card-title-group">
+              <h2>Resume Document &amp; Auto-Extraction</h2>
+              <p class="card-subtitle">Upload your resume to extract candidate fields and automatically attach the document to job applications.</p>
+            </div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="resume-upload-zone" id="resumeDropZone">
+            <input type="file" id="resumeFileInput" accept=".pdf,.doc,.docx,.txt" style="display: none;" />
+            <svg class="upload-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            <p class="upload-prompt-text">
+              Drag &amp; drop your resume here, or <button type="button" id="btnBrowseResume" class="btn-inline-browse">browse files</button>
+            </p>
+            <span class="upload-hint-text">PDF, DOCX, or TXT &bull; FlateDecode local extraction &bull; Max 10MB</span>
+          </div>
+
+          <!-- Saved Resume Badge -->
+          <div id="savedResumeInfo" class="saved-resume-badge-card" style="display: none;">
+            <div class="saved-resume-meta-box">
+              <svg class="saved-file-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              <div>
+                <div class="saved-resume-name" id="savedResumeFileName">Resume.pdf</div>
+                <div class="saved-resume-meta" id="savedResumeMeta">Ready to auto-upload on job boards</div>
+              </div>
+            </div>
+            <div class="saved-resume-actions">
+              <button type="button" id="btnReplaceResume" class="btn-secondary" title="Upload a different resume">Replace</button>
+              <button type="button" id="btnDeleteResume" class="btn-secondary" title="Remove saved resume">Remove</button>
+            </div>
+          </div>
+
+          <div id="resumeStatus" class="resume-status-box" style="display: none;"></div>
+        </div>
+      </section>
+
+      <!-- Section: Personal Information -->
+      <section class="card" id="section-personal">
+        <div class="card-header">
+          <div class="card-header-left">
+            <div class="card-icon-box">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+            </div>
+            <div class="card-title-group">
+              <h2>Personal &amp; Contact Information</h2>
+              <p class="card-subtitle">Primary candidate contact details used for core application fields.</p>
+            </div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="firstName">First Name</label>
+              <input type="text" id="firstName" placeholder="Jane" />
+            </div>
+            <div class="form-group">
+              <label for="lastName">Last Name</label>
+              <input type="text" id="lastName" placeholder="Doe" />
+            </div>
+            <div class="form-group full-width">
+              <label for="fullName">Full Legal Name <span class="hint-sub">(auto-computed if blank)</span></label>
+              <input type="text" id="fullName" placeholder="Jane Doe" />
+            </div>
+            <div class="form-group">
+              <label for="email">Email Address</label>
+              <input type="email" id="email" placeholder="jane@example.com" />
+            </div>
+            <div class="form-group">
+              <label for="phone">Phone Number</label>
+              <input type="tel" id="phone" placeholder="+1 (555) 123-4567" />
+            </div>
+            <div class="form-group">
+              <label for="city">City</label>
+              <input type="text" id="city" placeholder="San Francisco" />
+            </div>
+            <div class="form-group">
+              <label for="country">Country</label>
+              <input type="text" id="country" placeholder="United States" />
+            </div>
+            <div class="form-group full-width">
+              <label for="address">Street Address</label>
+              <input type="text" id="address" placeholder="123 Market St, Apt 4B" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section: Work Experience -->
+      <section class="card" id="section-experience">
+        <div class="card-header">
+          <div class="card-header-left">
+            <div class="card-icon-box">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+              </svg>
+            </div>
+            <div class="card-title-group">
+              <h2>Work Experience</h2>
+              <p class="card-subtitle">Professional employment history, current role, and past career milestones.</p>
+            </div>
+          </div>
+          <button type="button" id="btnAddExperience" class="btn-action-pill">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span>Add Experience</span>
+          </button>
+        </div>
+        <div class="card-body">
+          <div class="subsection-title" style="margin-bottom: 12px; color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; font-family: var(--font-mono);">Current / Most Recent Role</div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="currentJobTitle">Current / Most Recent Job Title</label>
+              <input type="text" id="currentJobTitle" placeholder="Senior Software Engineer" />
+            </div>
+            <div class="form-group">
+              <label for="currentCompany">Current / Most Recent Company</label>
+              <input type="text" id="currentCompany" placeholder="TechCorp Inc." />
+            </div>
+            <div class="form-group">
+              <label for="currentStartDate">Start Date</label>
+              <input type="text" id="currentStartDate" placeholder="e.g. Jan 2022 or 2022-01" />
+            </div>
+            <div class="form-group">
+              <label for="currentEndDate">End Date</label>
+              <input type="text" id="currentEndDate" placeholder="e.g. Present" />
+            </div>
+            <div class="form-group">
+              <label for="yearsOfExperience">Total Years of Experience</label>
+              <input type="text" id="yearsOfExperience" placeholder="6" />
+            </div>
+            <div class="form-group">
+              <label for="desiredSalary">Expected / Target Salary</label>
+              <input type="text" id="desiredSalary" placeholder="$150,000 / year or Open" />
+            </div>
+            <div class="form-group full-width">
+              <label for="experienceDescription">Experience Highlights &amp; Accomplishments</label>
+              <textarea id="experienceDescription" placeholder="Key responsibilities, systems architected, and leadership achievements..."></textarea>
+            </div>
+          </div>
+
+          <!-- Additional / Past Work History Entries -->
+          <div class="subsection-divider"></div>
+          <div class="subsection-header">
+            <div>
+              <h3 class="subsection-title">Past Roles &amp; Additional Experience</h3>
+              <p class="subsection-desc">Add previous employment, contract roles, or earlier career positions.</p>
+            </div>
+            <button type="button" id="btnAddExperienceInline" class="btn-action-pill secondary">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              <span>+ Add Past Role</span>
+            </button>
+          </div>
+          <div id="experienceList" class="dynamic-entries-container">
+            <!-- Dynamically populated by options.js -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Section: Education -->
+      <section class="card" id="section-education">
+        <div class="card-header">
+          <div class="card-header-left">
+            <div class="card-icon-box">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 10v6M2 10l10-5 10 5-10 5z"></path>
+                <path d="M6 12v5c3 3 9 3 12 0v-5"></path>
+              </svg>
+            </div>
+            <div class="card-title-group">
+              <h2>Education</h2>
+              <p class="card-subtitle">Academic degrees, university background, and graduation credentials.</p>
+            </div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="educationLevel">Highest Education Level Completed</label>
+              <select id="educationLevel">
+                <option value="">Select education level</option>
+                <option value="High School">High School / GED</option>
+                <option value="Associate Degree">Associate Degree</option>
+                <option value="Bachelor's Degree">Bachelor's Degree</option>
+                <option value="Master's Degree">Master's Degree</option>
+                <option value="Master of Business Administration">Master of Business Administration (MBA)</option>
+                <option value="Ph.D. / Doctorate">Ph.D. / Doctorate</option>
+                <option value="Other">Other / Self-Taught</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="university">University / College / School</label>
+              <input type="text" id="university" placeholder="University of California, Berkeley" />
+            </div>
+            <div class="form-group">
+              <label for="major">Major / Field of Study</label>
+              <input type="text" id="major" placeholder="Computer Science" />
+            </div>
+            <div class="form-group">
+              <label for="graduationYear">Graduation Year</label>
+              <input type="text" id="graduationYear" placeholder="2021" />
+            </div>
+            <div class="form-group full-width">
+              <label for="gpa">GPA / Grade Point Average</label>
+              <input type="text" id="gpa" placeholder="3.8 / 4.0" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section: Skills & Certifications -->
+      <section class="card" id="section-skills">
+        <div class="card-header">
+          <div class="card-header-left">
+            <div class="card-icon-box">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="16 18 22 12 16 6"></polyline>
+                <polyline points="8 6 2 12 8 18"></polyline>
+              </svg>
+            </div>
+            <div class="card-title-group">
+              <h2>Skills &amp; Certifications</h2>
+              <p class="card-subtitle">Technical skills, primary stack, and professional credentials.</p>
+            </div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="skills-manager-container">
+            <!-- Skills Add Input Bar -->
+            <label for="newSkillInput">Add Core Skills &amp; Technologies</label>
+            <div class="skill-input-bar">
+              <div class="input-icon-wrap">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="16 18 22 12 16 6"></polyline>
+                  <polyline points="8 6 2 12 8 18"></polyline>
+                </svg>
+                <input type="text" id="newSkillInput" placeholder="Type a skill (e.g. React, Next.js, Python, Docker) and press Enter..." />
+              </div>
+              <button type="button" id="btnAddSkill" class="btn-action-pill">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                <span>Add Skill</span>
+              </button>
+            </div>
+
+            <!-- Interactive Skills Tag Cloud -->
+            <div id="skillsTagContainer" class="skills-tag-cloud">
+              <!-- Rendered chips: [ TypeScript ✕ ] [ React ✕ ] -->
+            </div>
+
+            <!-- Quick Suggestions -->
+            <div class="quick-skills-bar">
+              <span class="quick-skills-title">Quick Add:</span>
+              <div class="quick-skills-chips" id="quickSkillsChips">
+                <button type="button" class="quick-chip" data-skill="React">+ React</button>
+                <button type="button" class="quick-chip" data-skill="TypeScript">+ TypeScript</button>
+                <button type="button" class="quick-chip" data-skill="Next.js">+ Next.js</button>
+                <button type="button" class="quick-chip" data-skill="Node.js">+ Node.js</button>
+                <button type="button" class="quick-chip" data-skill="Python">+ Python</button>
+                <button type="button" class="quick-chip" data-skill="AWS">+ AWS</button>
+                <button type="button" class="quick-chip" data-skill="Docker">+ Docker</button>
+                <button type="button" class="quick-chip" data-skill="PostgreSQL">+ PostgreSQL</button>
+                <button type="button" class="quick-chip" data-skill="GraphQL">+ GraphQL</button>
+                <button type="button" class="quick-chip" data-skill="Tailwind CSS">+ Tailwind CSS</button>
+              </div>
+            </div>
+
+            <!-- Raw text area (syncs automatically with chips, keeps full compatibility) -->
+            <div class="form-group full-width" style="margin-top: 14px;">
+              <div class="label-with-hint">
+                <label for="skills">All Skills (Raw &amp; Comma-Separated)</label>
+                <span class="field-hint">Auto-synced with chips above</span>
+              </div>
+              <textarea id="skills" placeholder="TypeScript, JavaScript, React, Node.js, Python, AWS, Docker, PostgreSQL, GraphQL"></textarea>
+            </div>
+
+            <div class="form-group full-width" style="margin-top: 14px;">
+              <label for="certifications">Certifications &amp; Licenses</label>
+              <textarea id="certifications" placeholder="AWS Certified Solutions Architect, CKA, PMP"></textarea>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section: Professional Links -->
+      <section class="card" id="section-links">
+        <div class="card-header">
+          <div class="card-header-left">
+            <div class="card-icon-box">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+              </svg>
+            </div>
+            <div class="card-title-group">
+              <h2>Online Profiles &amp; Portfolio</h2>
+              <p class="card-subtitle">Public profiles and personal website links.</p>
+            </div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="form-group full-width">
+              <label for="linkedin">LinkedIn Profile URL</label>
+              <input type="url" id="linkedin" placeholder="https://linkedin.com/in/janedoe" />
+            </div>
+            <div class="form-group full-width">
+              <label for="github">GitHub Profile URL</label>
+              <input type="url" id="github" placeholder="https://github.com/janedoe" />
+            </div>
+            <div class="form-group full-width">
+              <label for="portfolio">Portfolio / Personal Website</label>
+              <input type="url" id="portfolio" placeholder="https://janedoe.dev" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section: Work Authorization & Preferences -->
+      <section class="card" id="section-preferences">
+        <div class="card-header">
+          <div class="card-header-left">
+            <div class="card-icon-box">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              </svg>
+            </div>
+            <div class="card-title-group">
+              <h2>Work Authorization &amp; Availability</h2>
+              <p class="card-subtitle">Employment eligibility, sponsorship requirements, and start preferences.</p>
+            </div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="authorizedToWork">Legally authorized to work?</label>
+              <select id="authorizedToWork">
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="requiresSponsorship">Require visa sponsorship?</label>
+              <select id="requiresSponsorship">
+                <option value="No">No</option>
+                <option value="Yes">Yes</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="workPreference">Work Location Preference</label>
+              <select id="workPreference">
+                <option value="Remote">Remote</option>
+                <option value="Hybrid">Hybrid</option>
+                <option value="On-site">On-site</option>
+                <option value="Open to Any">Open to Any / Flexible</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="earliestStartDate">Earliest Start Date</label>
+              <input type="text" id="earliestStartDate" placeholder="Immediately or 2 weeks" />
+            </div>
+            <div class="form-group full-width">
+              <label for="noticePeriod">Notice Period</label>
+              <input type="text" id="noticePeriod" placeholder="2 weeks" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section: Professional Summary -->
+      <section class="card" id="section-summary">
+        <div class="card-header">
+          <div class="card-header-left">
+            <div class="card-icon-box">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="8" y1="6" x2="21" y2="6"></line>
+                <line x1="8" y1="12" x2="21" y2="12"></line>
+                <line x1="8" y1="18" x2="21" y2="18"></line>
+                <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                <line x1="3" y1="18" x2="3.01" y2="18"></line>
+              </svg>
+            </div>
+            <div class="card-title-group">
+              <h2>Professional Summary &amp; Bio</h2>
+              <p class="card-subtitle">Elevator pitch and short cover letter snippet for general questions.</p>
+            </div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="form-group full-width">
+            <label for="summary">Short Summary / Bio</label>
+            <textarea id="summary" placeholder="A concise professional summary, elevator pitch, or cover letter snippet..."></textarea>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section: Knowledge Base -->
+      <section class="card" id="section-knowledge-base">
+        <div class="card-header">
+          <div class="card-header-left">
+            <div class="card-icon-box">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+              </svg>
+            </div>
+            <div class="card-title-group">
+              <h2>Saved Questions &amp; Answers</h2>
+              <p class="card-subtitle">QuickFill automatically learns and stores responses from applications for instant future fill.</p>
+            </div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div id="customQAList" class="qa-card-list">
+            <!-- Dynamically populated by options.js -->
+          </div>
+
+          <button type="button" id="btnAddQA" class="btn-add-item">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span>Add Custom Question &amp; Answer</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Section: AI Engine Configuration -->
+      <section class="card" id="section-ai">
+        <div class="card-header">
+          <div class="card-header-left">
+            <div class="card-icon-box">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="10" rx="2"></rect>
+                <circle cx="12" cy="5" r="2"></circle>
+                <path d="M12 7v4"></path>
+              </svg>
+            </div>
+            <div class="card-title-group">
+              <h2>AI Engine Configuration</h2>
+              <p class="card-subtitle">Enable AI to answer complex custom questions (e.g. &ldquo;Why this role?&rdquo;, custom selects) using your profile context.</p>
+            </div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="switch-row">
+            <div class="switch-label-group">
+              <span class="switch-title">Enable AI-Powered Answers</span>
+              <span class="switch-desc">Allows background model generation for unmapped fields</span>
+            </div>
+            <label class="geist-switch">
+              <input type="checkbox" id="aiEnabled" />
+              <span class="switch-slider"></span>
+            </label>
+          </div>
+
+          <div id="aiFieldsWrapper" style="display: none; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border-subtle);">
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="aiProvider">AI Provider</label>
+                <select id="aiProvider">
+                  <option value="gemini">Google Gemini (Recommended / Free Tier)</option>
+                  <option value="openai">OpenAI</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="aiModel">Model</label>
+                <select id="aiModel">
+                  <option value="gemini-3.8-flash">Gemini 3.8 Flash (Fastest &amp; Latest)</option>
+                  <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                  <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                  <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                  <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                </select>
+              </div>
+              <div class="form-group full-width">
+                <label for="aiApiKey">API Secret Key</label>
+                <div class="api-key-group">
+                  <input type="password" id="aiApiKey" placeholder="Paste your API key here" autocomplete="off" />
+                  <button type="button" id="toggleApiKeyVisibility" class="btn-icon-action" title="Toggle key visibility">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                  </button>
+                  <button type="button" id="btnTestAI" class="btn-secondary">Test Connection</button>
+                </div>
+                <div id="aiTestResult" class="resume-status-box" style="display: none;"></div>
+                <div class="field-hint-text" id="apiKeyHint">
+                  Gemini: Get a free API key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section: Activity & Error Logs -->
+      <section class="card" id="section-logs">
+        <div class="card-header">
+          <div class="card-header-left">
+            <div class="card-icon-box">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="4 17 10 11 4 5"></polyline>
+                <line x1="12" y1="19" x2="20" y2="19"></line>
+              </svg>
+            </div>
+            <div class="card-title-group">
+              <h2>Telemetry &amp; Activity Logs</h2>
+              <p class="card-subtitle">Real-time diagnostics from the DOM scanner, background worker, and AI engine.</p>
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" id="btnRefreshLogs" class="btn-secondary">Refresh</button>
+            <button type="button" id="btnCopyLogs" class="btn-secondary">Copy</button>
+            <button type="button" id="btnClearLogs" class="btn-secondary" style="color: var(--accent-red);">Clear</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div id="logsViewer" class="logs-terminal">
+            <div style="color: var(--text-muted);">No activity recorded yet. Everything is operational.</div>
+          </div>
+        </div>
+      </section>
+
+    </form>
+  </main>
+
+  <!-- Vercel Floating Bottom Save Bar -->
+  <footer class="floating-save-bar">
+    <div class="floating-save-inner">
+      <div class="save-status-text" id="saveStatusIndicator">
+        <span>Changes persist instantly to extension storage</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <button type="submit" form="profileForm" class="btn-primary-vercel">
+          <span>Save Changes</span>
+          <kbd class="kbd-shortcut">Ctrl+S</kbd>
+        </button>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Toast (Sonner Style) -->
+  <div id="toast" class="toast"></div>
+
+  <script src="scripts/logger.js"></script>
+  <script src="scripts/ai-service.js"></script>
+  <script src="scripts/resume-parser.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>
