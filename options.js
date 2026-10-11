@@ -1328,10 +1328,42 @@ async function handleResumeUpload(file) {
     }
     renderSavedResumeBadge(resumeData);
 
-    statusEl.innerHTML = `<span class="geist-spinner"></span><span>Extracting candidate details from <strong>${escapeHtml(file.name)}</strong>…</span>`;
+    // 3.5 INSTANT PROGRESSIVE HYDRATION (< 25ms)
+    // Populate standard contact, education, and skill fields immediately via local regex heuristics
+    let fastPopulatedCount = 0;
+    if (window.QuickFillResumeParser && typeof window.QuickFillResumeParser.extractResumeHeuristics === 'function') {
+      try {
+        const fastResult = window.QuickFillResumeParser.extractResumeHeuristics(resumeText || '');
+        const fastProfile = fastResult.profile || {};
+        Object.entries(fastProfile).forEach(([field, value]) => {
+          const el = document.getElementById(field);
+          if (el && value && String(value).trim()) {
+            el.value = String(value).trim();
+            fastPopulatedCount++;
+            el.style.borderColor = 'var(--accent-blue)';
+            setTimeout(() => { el.style.borderColor = ''; }, 2000);
+          }
+        });
+
+        if (!document.getElementById('fullName').value && (fastProfile.firstName || fastProfile.lastName)) {
+          document.getElementById('fullName').value = [fastProfile.firstName, fastProfile.lastName].filter(Boolean).join(' ');
+        }
+        renderSkillTags();
+      } catch (fastErr) {
+        console.warn('[QuickFill] Fast heuristic hydration note:', fastErr);
+      }
+    }
+
+    const aiSettings = gatherAISettings();
+    const hasAIKey = !!(aiSettings && aiSettings.apiKey && aiSettings.apiKey.trim());
+
+    if (hasAIKey) {
+      statusEl.innerHTML = `<span class="geist-spinner"></span><span>⚡ Fast preview ready (${fastPopulatedCount} fields)! Refining work history & summary with AI in background…</span>`;
+    } else {
+      statusEl.innerHTML = `<span class="geist-spinner"></span><span>Extracting candidate details from <strong>${escapeHtml(file.name)}</strong>…</span>`;
+    }
 
     // 4. Parse resume data (try background worker, fallback to in-page parser)
-    const aiSettings = gatherAISettings();
     let response = null;
 
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
@@ -1427,11 +1459,17 @@ async function handleResumeUpload(file) {
     }
 
     statusEl.className = 'resume-status-box success';
-    statusEl.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Success! Resume saved & ready to auto-upload on job forms. Extracted <strong>${populatedCount} profile fields</strong> and <strong>${qaCount} custom questions</strong>.</span>`;
-    showToast(`Resume saved & imported! ${populatedCount} fields populated.`, 'success');
+    statusEl.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Success! Resume saved & ready to auto-upload on job forms. Extracted <strong>${populatedCount || fastPopulatedCount} profile fields</strong> and <strong>${qaCount} custom questions</strong>.</span>`;
+    showToast(`Resume saved & imported! ${populatedCount || fastPopulatedCount} fields populated.`, 'success');
 
   } catch (err) {
     console.error('[Resume Parse Error]', err);
+    if (fastPopulatedCount > 0) {
+      statusEl.className = 'resume-status-box success';
+      statusEl.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Resume saved! Populated <strong>${fastPopulatedCount} fields</strong> via instant heuristics.</span>`;
+      showToast(`Resume saved! ${fastPopulatedCount} fields populated.`, 'success');
+      return;
+    }
     statusEl.className = 'resume-status-box error';
     statusEl.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg><span>Parsing error: ${escapeHtml(err.message)}</span>`;
     showToast('Failed to parse resume: ' + err.message, 'error');
@@ -1721,6 +1759,55 @@ async function testAIConnection() {
   }
 }
 
+/**
+ * Render statistics for Zero-Latency AI Response Cache
+ */
+async function renderCacheStats() {
+  const badge = document.getElementById('cacheCountBadge');
+  if (!badge) return;
+
+  try {
+    let count = 0;
+    if (hasStorage()) {
+      const { quickfill_ai_cache = {} } = await chrome.storage.local.get('quickfill_ai_cache');
+      count = Object.keys(quickfill_ai_cache).length;
+    } else if (typeof localStorage !== 'undefined') {
+      const cache = JSON.parse(localStorage.getItem('quickfill_ai_cache') || '{}');
+      count = Object.keys(cache).length;
+    }
+    badge.textContent = `${count} saved answer${count === 1 ? '' : 's'}`;
+  } catch (e) {
+    badge.textContent = '0 saved answers';
+  }
+}
+
+/**
+ * Clear the Zero-Latency AI Response Cache
+ */
+async function handleClearCache() {
+  const btn = document.getElementById('btnClearCache');
+  if (btn) btn.disabled = true;
+
+  try {
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      await chrome.runtime.sendMessage({ action: 'CLEAR_CACHE' }).catch(() => {});
+    }
+    if (hasStorage()) {
+      await chrome.storage.local.set({ quickfill_ai_cache: {} });
+    }
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('quickfill_ai_cache');
+    }
+
+    await renderCacheStats();
+    showToast('AI response cache cleared successfully.', 'success');
+  } catch (err) {
+    showToast('Failed to clear cache: ' + err.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 // ============================================================
 // 6. ACTIVITY & ERROR LOGS VIEWER
 // ============================================================
@@ -1787,6 +1874,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   loadProfile();
   renderLogs();
+  renderCacheStats();
   MonthYearPicker.init();
 
   // Current Role "Present" button
@@ -1916,6 +2004,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Test AI Connection button
   document.getElementById('btnTestAI')?.addEventListener('click', testAIConnection);
+
+  // Clear AI Zero-Latency Cache button
+  document.getElementById('btnClearCache')?.addEventListener('click', handleClearCache);
 
   // Auto-enable AI checkbox when typing API key
   document.getElementById('aiApiKey')?.addEventListener('input', (e) => {

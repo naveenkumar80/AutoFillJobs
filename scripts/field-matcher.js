@@ -35,7 +35,7 @@
       autocomplete: 'tel',
     },
     city: {
-      regex: /\bcity\b|ciudad|location(?!.*(?:country|type|pref))|\bort\b|ville|city[\s_-]?town/i,
+      regex: /\bcity\b|ciudad|\blocation\b(?!.*(?:country|type|pref|reloc))|\bort\b|ville|city[\s_-]?town/i,
       inputTypes: ['text'],
       autocomplete: 'address-level2',
     },
@@ -71,11 +71,11 @@
       inputTypes: ['text'],
     },
     currentStartDate: {
-      regex: /(?:job|work|employment|role|position)?[\s_-]?(?:start[\s_-]?date|from[\s_-]?date|date[\s_-]?from|start[\s_-]?month|start[\s_-]?year|started)\b/i,
+      regex: /(?:job|work|employment|role|position|current)[\s_-]+(?:start[\s_-]?date|from[\s_-]?date|date[\s_-]?from|start[\s_-]?month|start[\s_-]?year|started)\b/i,
       inputTypes: ['text', 'date', 'number'],
     },
     currentEndDate: {
-      regex: /(?:job|work|employment|role|position)?[\s_-]?(?:end[\s_-]?date|to[\s_-]?date|date[\s_-]?to|end[\s_-]?month|end[\s_-]?year|ended|until)\b/i,
+      regex: /(?:job|work|employment|role|position|current)[\s_-]+(?:end[\s_-]?date|to[\s_-]?date|date[\s_-]?to|end[\s_-]?month|end[\s_-]?year|ended|until)\b/i,
       inputTypes: ['text', 'date', 'number'],
     },
     yearsOfExperience: {
@@ -143,6 +143,59 @@
     summary: {
       regex: /summary|cover[\s_-]?letter|about[\s_-]?(?:you|me|yourself)?|bio(?:graphy)?|description|additional[\s_-]?info(?:rmation)?|introduction|tell[\s_-]?us|message|applicant[\s_-]?letter|awsm_applicant_letter/i,
       inputTypes: ['text'],
+    },
+    // Legal & Employment Compliance (Deterministic Instant Fill)
+    isLegalAge: {
+      regex: /(?:are[\s_-]?you[\s_-]?(?:at[\s_-]?least|over)?[\s_-]?18|18[\s_-]?(?:years?[\s_-]?of[\s_-]?age|or[\s_-]?older)|legal[\s_-]?(?:working[\s_-]?age|age[\s_-]?to[\s_-]?work))/i,
+      isYesNo: true,
+      defaultValue: 'Yes',
+    },
+    backgroundCheckConsent: {
+      regex: /(?:consent|agree|willing)[\s_-]?(?:to[\s_-]?)?(?:undergo|complete|submit[\s_-]?to)?[\s_-]?(?:a[\s_-]?)?(?:background|criminal)[\s_-]?(?:check|investigation|screening)|background[\s_-]?check/i,
+      isYesNo: true,
+      defaultValue: 'Yes',
+    },
+    drugScreenConsent: {
+      regex: /(?:consent|agree|willing)[\s_-]?(?:to[\s_-]?)?(?:undergo|complete)?[\s_-]?(?:a[\s_-]?)?(?:drug|substance)[\s_-]?(?:test|screen|screening)|drug[\s_-]?(?:test|screening)/i,
+      isYesNo: true,
+      defaultValue: 'Yes',
+    },
+    nonCompete: {
+      regex: /(?:bound[\s_-]?by|subject[\s_-]?to|signed)[\s_-]?(?:any[\s_-]?)?(?:non[\s_-]?compete|restrictive[\s_-]?covenant|non[\s_-]?solicitation|confidentiality[\s_-]?agreement)[\s_-]?(?:with[\s_-]?prior|previous)?/i,
+      isYesNo: true,
+      defaultValue: 'No',
+    },
+    formerEmployee: {
+      regex: /(?:previously|ever|prior)[\s_-]?(?:been[\s_-]?)?employed[\s_-]?(?:by|at)|worked[\s_-]?(?:for|at|with)[\s_-]?(?:this[\s_-]?company|us|here)[\s_-]?before|former[\s_-]?employee|previous[\s_-]?employment[\s_-]?with/i,
+      isYesNo: true,
+      defaultValue: 'No',
+    },
+    familyEmployee: {
+      regex: /(?:family[\s_-]?members?|relatives?|immediate[\s_-]?family)[\s_-]?(?:currently[\s_-]?)?(?:working|employed)[\s_-]?(?:here|at[\s_-]?this[\s_-]?company)|related[\s_-]?to[\s_-]?anyone/i,
+      isYesNo: true,
+      defaultValue: 'No',
+    },
+    relocation: {
+      regex: /(?:willing|open)[\s_-]?(?:to[\s_-]?)?relocate|open[\s_-]?to[\s_-]?relocation|relocation[\s_-]?(?:preference|willingness)/i,
+      isYesNo: true,
+      defaultValue: 'Yes',
+    },
+    // EEO / Demographic Self-Identification
+    eeoGender: {
+      regex: /\b(?:gender|gender[\s_-]?identity|sex)\b(?!\s*orientation)/i,
+      defaultValue: 'Decline to self-identify',
+    },
+    eeoVeteran: {
+      regex: /veteran[\s_-]?status|protected[\s_-]?veteran|military[\s_-]?status/i,
+      defaultValue: 'Not a protected veteran',
+    },
+    eeoDisability: {
+      regex: /disability[\s_-]?status|have[\s_-]?a[\s_-]?disability|individual[\s_-]?with[\s_-]?a[\s_-]?disability/i,
+      defaultValue: 'No, I do not have a disability',
+    },
+    eeoRace: {
+      regex: /race[\s_-]?\/?[\s_-]?ethnicity|ethnic[\s_-]?background|hispanic[\s_-]?or[\s_-]?latino/i,
+      defaultValue: 'Decline to self-identify',
     },
   };
 
@@ -343,6 +396,92 @@
       }
 
       return false;
+    },
+
+    /**
+     * Normalize question text for zero-latency fuzzy cache lookups
+     * @param {string} text
+     * @returns {string}
+     */
+    normalizeQuestion(text) {
+      if (!text) return '';
+      return String(text)
+        .toLowerCase()
+        .replace(/[\*✱?:;'"“”‘’`()[\]{}<>|\\/~!@#$%^&=+_-]/g, ' ')
+        .replace(/\b(please|select|choose|specify|enter|your|the|a|an|required|optional|indicate|provide|tell[\s_-]?us|describe)\b/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    },
+
+    /**
+     * Match common compliance, legal, age, and employment questions deterministically
+     * @param {string} questionText
+     * @param {Object} [profile]
+     * @returns {string|null}
+     */
+    matchStandardComplianceQuestion(questionText, profile = {}) {
+      if (!questionText) return null;
+      const text = questionText.toLowerCase();
+
+      // Age verification (18+)
+      if (/(?:are[\s_-]?you[\s_-]?(?:at[\s_-]?least|over)?[\s_-]?18|18[\s_-]?(?:years?[\s_-]?of[\s_-]?age|or[\s_-]?older)|legal[\s_-]?(?:working[\s_-]?age|age[\s_-]?to[\s_-]?work))/i.test(text)) {
+        return 'Yes';
+      }
+
+      // Background check & screening consent
+      if (/(?:background|criminal)[\s_-]?(?:check|investigation|screening)|consent[\s_-]?to[\s_-]?(?:a[\s_-]?)?background/i.test(text)) {
+        return 'Yes';
+      }
+
+      // Drug testing consent
+      if (/(?:drug|substance)[\s_-]?(?:test|screening|screen)|consent[\s_-]?to[\s_-]?(?:a[\s_-]?)?drug/i.test(text)) {
+        return 'Yes';
+      }
+
+      // Non-compete agreement
+      if (/(?:non[\s_-]?compete|restrictive[\s_-]?covenant|non[\s_-]?solicitation)/i.test(text)) {
+        return 'No';
+      }
+
+      // Former employee / prior employment
+      if (/(?:previously|prior|ever)[\s_-]?(?:been[\s_-]?)?employed[\s_-]?(?:by|at|here)|worked[\s_-]?(?:for|at)[\s_-]?(?:us|this[\s_-]?company|here)[\s_-]?before|former[\s_-]?employee/i.test(text)) {
+        return 'No';
+      }
+
+      // Relatives working at company
+      if (/(?:family[\s_-]?members?|relatives?|immediate[\s_-]?family)[\s_-]?(?:currently[\s_-]?)?(?:working|employed)|related[\s_-]?to[\s_-]?anyone/i.test(text)) {
+        return 'No';
+      }
+
+      // Relocation willingness
+      if (/(?:willing|open)[\s_-]?(?:to[\s_-]?)?relocate|open[\s_-]?to[\s_-]?relocation/i.test(text)) {
+        if (profile?.workPreference && /remote/i.test(profile.workPreference)) {
+          return 'Open to relocation';
+        }
+        return 'Yes';
+      }
+
+      // EEO Gender
+      if (/\b(?:gender|gender[\s_-]?identity|sex)\b(?!\s*orientation)/i.test(text)) {
+        return profile?.eeoGender || 'Decline to self-identify';
+      }
+
+      // EEO Veteran
+      if (/veteran[\s_-]?status|protected[\s_-]?veteran/i.test(text)) {
+        return profile?.eeoVeteran || 'Not a protected veteran';
+      }
+
+      // EEO Disability
+      if (/disability[\s_-]?status|have[\s_-]?a[\s_-]?disability/i.test(text)) {
+        return profile?.eeoDisability || 'No, I do not have a disability';
+      }
+
+      // EEO Race / Ethnicity
+      if (/race[\s_-]?\/?[\s_-]?ethnicity|ethnic[\s_-]?background/i.test(text)) {
+        return profile?.eeoRace || 'Decline to self-identify';
+      }
+
+      return null;
     },
   };
 

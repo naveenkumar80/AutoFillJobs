@@ -75,5 +75,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // 6. AI Zero-Latency Cache Management
+  if (action === 'GET_CACHE_STATS') {
+    AIService.getCacheStats()
+      .then((stats) => sendResponse({ stats }))
+      .catch((err) => sendResponse({ error: err.message, stats: { count: 0 } }));
+    return true;
+  }
+
+  if (action === 'CLEAR_CACHE') {
+    AIService.clearCache()
+      .then(() => sendResponse({ success: true }))
+      .catch((err) => sendResponse({ error: err.message }));
+    return true;
+  }
+
   return false;
 });

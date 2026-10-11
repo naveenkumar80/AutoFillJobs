@@ -617,6 +617,29 @@
               </div>
             </div>
           </div>
+
+          <!-- Zero-Latency Performance Cache Card -->
+          <div class="ai-cache-card" style="margin-top: 18px; padding: 14px 16px; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div style="width: 28px; height: 28px; border-radius: 6px; background: rgba(59, 130, 246, 0.12); display: flex; align-items: center; justify-content: center; color: var(--accent-blue); flex-shrink: 0;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                </svg>
+              </div>
+              <div>
+                <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                  <span>Zero-Latency Response Cache</span>
+                  <span id="cacheCountBadge" class="badge-tag" style="background: var(--bg-hover); font-size: 11px; padding: 1px 7px; border-radius: 10px;">0 saved answers</span>
+                </div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                  Repeated job application questions fill in 0ms without consuming API tokens.
+                </div>
+              </div>
+            </div>
+            <button type="button" id="btnClearCache" class="btn-secondary" style="font-size: 12px; padding: 6px 12px; white-space: nowrap;">
+              Clear Cache
+            </button>
+          </div>
         </div>
       </section>
 
@@ -697,6 +720,7 @@
   <div id="toast" class="toast"></div>
 
   <script src="scripts/logger.js"></script>
+  <script src="scripts/field-matcher.js"></script>
   <script src="scripts/ai-service.js"></script>
   <script src="scripts/resume-parser.js"></script>
   <script src="options.js"></script>

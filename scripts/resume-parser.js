@@ -179,20 +179,20 @@ Return ONLY this JSON object.`;
                   rawJSON = await aiServiceInstance.callGemini(cleanKey, geminiModel, [
                     { inlineData: { mimeType: 'application/pdf', data: base64Pdf } },
                     { text: resumePrompt },
-                  ]);
+                  ], 2048);
                 } catch (pdfErr) {
                   Logger.warn('resume-parser', `Gemini inlineData PDF failed (${pdfErr.message}), trying text prompt`);
                   if (resumeText && resumeText.trim().length > 30) {
-                    rawJSON = await aiServiceInstance.callGemini(cleanKey, geminiModel, `${resumePrompt}\n\nRESUME TEXT:\n${resumeText}`);
+                    rawJSON = await aiServiceInstance.callGemini(cleanKey, geminiModel, `${resumePrompt}\n\nRESUME TEXT:\n${resumeText}`, 2048);
                   } else {
                     throw pdfErr;
                   }
                 }
               } else {
-                rawJSON = await aiServiceInstance.callGemini(cleanKey, geminiModel, `${resumePrompt}\n\nRESUME TEXT:\n${resumeText}`);
+                rawJSON = await aiServiceInstance.callGemini(cleanKey, geminiModel, `${resumePrompt}\n\nRESUME TEXT:\n${resumeText}`, 2048);
               }
             } else if (provider === 'openai') {
-              rawJSON = await aiServiceInstance.callOpenAI(cleanKey, model || 'gpt-4o-mini', `${resumePrompt}\n\nRESUME TEXT:\n${resumeText}`);
+              rawJSON = await aiServiceInstance.callOpenAI(cleanKey, model || 'gpt-4o-mini', `${resumePrompt}\n\nRESUME TEXT:\n${resumeText}`, 2048);
             }
 
             const parsed = aiServiceInstance.parseAIResponse(rawJSON);

@@ -145,8 +145,31 @@
       return { aiFilled: 0 };
     }
 
-    const questionsBatch = questionsToAsk.slice(0, 25);
-    Logger.info('content', `Dispatching ${questionsBatch.length} unmatched questions to AI`);
+    // Pair questions with their corresponding target elements
+    const paired = questionsToAsk.map((q, idx) => ({
+      question: q,
+      target: targetElements[idx],
+    }));
+
+    // Prioritize high-value fields: textareas first, then selects/radios, then short text
+    paired.sort((a, b) => {
+      const getPriority = (item) => {
+        if (item.question.fieldType === 'textarea') return 3;
+        if (item.question.fieldType === 'select' || item.question.fieldType === 'radio') return 2;
+        return 1;
+      };
+      return getPriority(b) - getPriority(a);
+    });
+
+    // High-speed micro-batch: limit to top 8 priority questions for sub-second LLM latency
+    const microBatch = paired.slice(0, 8);
+    const questionsBatch = microBatch.map((item, idx) => ({
+      ...item.question,
+      index: idx,
+    }));
+    const batchTargets = microBatch.map((item) => item.target);
+
+    Logger.info('content', `Dispatching micro-batch of ${questionsBatch.length} prioritized questions to AI`);
 
     try {
       const response = await chrome.runtime.sendMessage({
@@ -165,6 +188,7 @@
       const answers = response.answers || {};
       let aiFilled = 0;
       const newSavedQA = [];
+      const newCacheEntries = [];
 
       for (let i = 0; i < questionsBatch.length; i++) {
         const q = questionsBatch[i];
@@ -180,7 +204,7 @@
         if (!ans || !String(ans).trim()) continue;
 
         const answerText = String(ans).trim();
-        const target = targetElements[i];
+        const target = batchTargets[i];
         if (!target || !target.element) continue;
 
         let filled = false;
@@ -203,18 +227,43 @@
           aiFilled++;
           DOM.highlightFieldAI(target.element);
 
-          // Add to auto-save collection for future applications
+          // Add to auto-save collection for user profile knowledge base
           newSavedQA.push({
             id: 'qa_' + Date.now() + '_' + i,
             question: questionsBatch[i].questionText,
             answer: answerText,
             autoSaved: true,
           });
+
+          // Add to Zero-Latency Cache
+          const normKey = Matcher.normalizeQuestion
+            ? Matcher.normalizeQuestion(questionsBatch[i].questionText)
+            : questionsBatch[i].questionText.toLowerCase().trim();
+          newCacheEntries.push({ key: normKey, answer: answerText });
         }
       }
 
       if (newSavedQA.length > 0) {
         await saveNewCustomQAs(newSavedQA);
+      }
+
+      // Persist to zero-latency cache directly
+      if (newCacheEntries.length > 0) {
+        try {
+          const { quickfill_ai_cache = {} } = await chrome.storage.local.get('quickfill_ai_cache');
+          for (const entry of newCacheEntries) {
+            quickfill_ai_cache[entry.key] = {
+              answer: entry.answer,
+              savedAt: Date.now(),
+              lastAccessed: Date.now(),
+              hits: 1,
+            };
+          }
+          await chrome.storage.local.set({ quickfill_ai_cache });
+          Logger.info('content', `Persisted ${newCacheEntries.length} answers to zero-latency cache`);
+        } catch (cacheErr) {
+          Logger.warn('content', `Failed to write cache in content script: ${cacheErr.message}`);
+        }
       }
 
       return { aiFilled, newSavedQA };
@@ -339,10 +388,15 @@
       const profileKey = Matcher.matchFieldToProfile(el);
       if (!profileKey) continue;
 
-      const profileValue = profile[profileKey];
-      if (!profileValue || !profileValue.trim()) continue;
+      const pattern = Matcher.FIELD_PATTERNS[profileKey];
+      let profileValue = profile[profileKey];
+      // Fallback to pattern default if profile does not specify (e.g. standard compliance yes/no)
+      if ((!profileValue || !String(profileValue).trim()) && pattern?.defaultValue) {
+        profileValue = pattern.defaultValue;
+      }
+      if (!profileValue || !String(profileValue).trim()) continue;
 
-      const isYesNoField = Matcher.FIELD_PATTERNS[profileKey]?.isYesNo;
+      const isYesNoField = pattern?.isYesNo;
       if (usedKeys.has(profileKey) && !isYesNoField) continue;
 
       let filled = false;
@@ -352,7 +406,7 @@
       } else if (el.type === 'radio') {
         filled = DOM.fillRadioGroup(el, profileValue);
       } else if (el.type === 'checkbox' && isYesNoField) {
-        const shouldCheck = profileValue.toLowerCase() === 'yes';
+        const shouldCheck = String(profileValue).toLowerCase() === 'yes';
         if (el.checked !== shouldCheck) {
           el.click();
           filled = true;
@@ -371,6 +425,48 @@
         usedKeys.add(profileKey);
         filledElements.add(el);
         DOM.highlightField(el);
+      }
+    }
+
+    // === PASS 1.2: Instant Legal & Compliance Heuristics (< 10ms) ===
+    for (const el of elements) {
+      if (!DOM.isVisible(el)) continue;
+      if (el.type === 'file' || el.type === 'password' || el.type === 'submit' || el.type === 'button') continue;
+      if (el.readOnly) continue;
+      if (filledElements.has(el) || DOM.isAlreadyFilled(el)) continue;
+
+      let qText = null;
+      if (el.type === 'radio') {
+        const radios = document.querySelectorAll(`input[type="radio"][name="${CSS.escape(el.name)}"]`);
+        qText = Matcher.findRadioGroupQuestionText(el, radios);
+      } else {
+        qText = Matcher.findFieldQuestionText(el);
+      }
+      if (!qText) continue;
+
+      const complianceAns = Matcher.matchStandardComplianceQuestion(qText, profile);
+      if (complianceAns) {
+        let filled = false;
+        if (el.tagName === 'SELECT') {
+          filled = DOM.fillSelect(el, complianceAns);
+        } else if (el.type === 'radio') {
+          filled = DOM.fillRadioGroup(el, complianceAns);
+        } else if (el.type === 'checkbox') {
+          const shouldCheck = /^(yes|true|1|agree|checked)$/i.test(complianceAns);
+          if (el.checked !== shouldCheck) {
+            el.click();
+            filled = true;
+          }
+        } else if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+          DOM.setNativeValue(el, complianceAns);
+          filled = true;
+        }
+
+        if (filled) {
+          profileFilled++;
+          filledElements.add(el);
+          DOM.highlightField(el);
+        }
       }
     }
 
@@ -413,6 +509,54 @@
       }
     }
 
+    // === PASS 1.8: Zero-Latency Query Cache Matching (< 5ms) ===
+    try {
+      const { quickfill_ai_cache = {} } = await chrome.storage.local.get('quickfill_ai_cache');
+      for (const el of elements) {
+        if (!DOM.isVisible(el)) continue;
+        if (el.type === 'file' || el.type === 'password' || el.type === 'submit' || el.type === 'button') continue;
+        if (el.readOnly) continue;
+        if (filledElements.has(el) || DOM.isAlreadyFilled(el)) continue;
+
+        let qText = null;
+        if (el.type === 'radio') {
+          const radios = document.querySelectorAll(`input[type="radio"][name="${CSS.escape(el.name)}"]`);
+          qText = Matcher.findRadioGroupQuestionText(el, radios);
+        } else {
+          qText = Matcher.findFieldQuestionText(el);
+        }
+        if (!qText) continue;
+
+        const normQ = Matcher.normalizeQuestion ? Matcher.normalizeQuestion(qText) : qText.toLowerCase().trim();
+        const cachedEntry = quickfill_ai_cache[normQ];
+        if (cachedEntry && cachedEntry.answer) {
+          let filled = false;
+          if (el.tagName === 'SELECT') {
+            filled = DOM.fillSelect(el, cachedEntry.answer);
+          } else if (el.type === 'radio') {
+            filled = DOM.fillRadioGroup(el, cachedEntry.answer);
+          } else if (el.type === 'checkbox') {
+            const shouldCheck = /^(yes|true|1|agree|checked)$/i.test(cachedEntry.answer);
+            if (el.checked !== shouldCheck) {
+              el.click();
+              filled = true;
+            }
+          } else if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+            DOM.setNativeValue(el, cachedEntry.answer);
+            filled = true;
+          }
+
+          if (filled) {
+            aiFilled++;
+            filledElements.add(el);
+            DOM.highlightFieldAI(el);
+          }
+        }
+      }
+    } catch (cacheErr) {
+      Logger.warn('content', `Cache lookup note: ${cacheErr.message}`);
+    }
+
     // === PASS 2: AI-Powered Missing Questions ===
     let aiError = null;
     let newQuestionsSaved = 0;
@@ -422,7 +566,7 @@
         Logger.warn('content', aiError);
       } else {
         const aiResult = await fillUnmatchedWithAI(elements, filledElements, profile, aiSettings, customQA || []);
-        aiFilled = aiResult.aiFilled || 0;
+        aiFilled += aiResult.aiFilled || 0;
         aiError = aiResult.error || null;
         newQuestionsSaved = aiResult.newSavedQA?.length || 0;
       }
