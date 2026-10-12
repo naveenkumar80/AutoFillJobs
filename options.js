@@ -608,89 +608,8 @@ function parseSkillsArray(str) {
   ));
 }
 
-/**
- * Render interactive skill tags based on the current #skills textarea value
- */
-function renderSkillTags() {
-  const container = document.getElementById('skillsTagContainer');
-  const skillsInput = document.getElementById('skills');
-  if (!container || !skillsInput) return;
-
-  const skills = parseSkillsArray(skillsInput.value);
-
-  if (skills.length === 0) {
-    container.innerHTML = '';
-    return;
-  }
-
-  container.innerHTML = skills.map((skill) => `
-    <span class="skill-chip">
-      <span>${escapeHtml(skill)}</span>
-      <button type="button" class="btn-remove-skill" data-skill="${escapeHtml(skill)}" title="Remove skill">&times;</button>
-    </span>
-  `).join('');
-
-  // Wire remove buttons
-  container.querySelectorAll('.btn-remove-skill').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const skillToRemove = e.currentTarget.getAttribute('data-skill');
-      removeSkill(skillToRemove);
-    });
-  });
-}
-
-/**
- * Add one or more skills (supports comma-separated) and sync to textarea
- */
-function addSkill(skillName) {
-  if (!skillName || !skillName.trim()) return;
-  const skillsInput = document.getElementById('skills');
-  if (!skillsInput) return;
-
-  const currentSkills = parseSkillsArray(skillsInput.value);
-  const newSkills = parseSkillsArray(skillName);
-
-  let addedCount = 0;
-  newSkills.forEach((s) => {
-    if (!currentSkills.some((existing) => existing.toLowerCase() === s.toLowerCase())) {
-      currentSkills.push(s);
-      addedCount++;
-    }
-  });
-
-  if (addedCount > 0) {
-    skillsInput.value = currentSkills.join(', ');
-    renderSkillTags();
-    showToast(`Added: ${newSkills.join(', ')}`, 'success');
-  }
-
-  const newSkillInput = document.getElementById('newSkillInput');
-  if (newSkillInput) {
-    newSkillInput.value = '';
-    newSkillInput.focus();
-  }
-}
-
-/**
- * Remove a skill by name and sync to textarea
- */
-function removeSkill(skillToRemove) {
-  const skillsInput = document.getElementById('skills');
-  if (!skillsInput) return;
-
-  const currentSkills = parseSkillsArray(skillsInput.value);
-  const filtered = currentSkills.filter(
-    (s) => s.toLowerCase() !== (skillToRemove || '').toLowerCase().trim()
-  );
-
-  skillsInput.value = filtered.join(', ');
-  renderSkillTags();
-}
-
-
 // ============================================================
-// 2C-2. SKILLS AUTOCOMPLETE & AUTO-SUGGESTIONS
+// 2C-1. CORE SKILLS DATABASE & ALIAS NORMALIZATION
 // ============================================================
 
 const SKILL_DATABASE = [
@@ -716,6 +635,8 @@ const SKILL_DATABASE = [
   { name: 'Scala', category: 'Language' },
   { name: 'R', category: 'Language' },
   { name: 'Solidity', category: 'Language' },
+  { name: 'Elixir', category: 'Language' },
+  { name: 'Clojure', category: 'Language' },
 
   // Frontend Frameworks & Libraries
   { name: 'React', category: 'Frontend' },
@@ -746,6 +667,7 @@ const SKILL_DATABASE = [
   { name: 'Flask', category: 'Backend' },
   { name: 'Spring Boot', category: 'Backend' },
   { name: '.NET Core', category: 'Backend' },
+  { name: '.NET', category: 'Backend' },
   { name: 'Ruby on Rails', category: 'Backend' },
   { name: 'Laravel', category: 'Backend' },
   { name: 'GraphQL', category: 'Backend' },
@@ -832,8 +754,448 @@ const SKILL_DATABASE = [
   { name: 'System Design', category: 'Architecture' },
   { name: 'Distributed Systems', category: 'Architecture' },
   { name: 'Clean Architecture', category: 'Architecture' },
-  { name: 'Agile / Scrum', category: 'Methodology' },
+  { name: 'Agile / Scrum', category: 'Methodology' }
 ];
+
+const SKILL_ALIASES = {
+  'k8s': 'Kubernetes',
+  'kube': 'Kubernetes',
+  'js': 'JavaScript',
+  'ts': 'TypeScript',
+  'py': 'Python',
+  'golang': 'Go (Golang)',
+  'postgres': 'PostgreSQL',
+  'postgresql': 'PostgreSQL',
+  'reactjs': 'React',
+  'nodejs': 'Node.js',
+  'vuejs': 'Vue.js',
+  'nextjs': 'Next.js',
+  'nuxtjs': 'Nuxt.js',
+  'sveltekit': 'SvelteKit',
+  'tailwind': 'Tailwind CSS',
+  'tailwindcss': 'Tailwind CSS',
+  'aws': 'AWS',
+  'gcp': 'Google Cloud Platform (GCP)',
+  'azure': 'Microsoft Azure',
+  'ml': 'Machine Learning',
+  'dl': 'Deep Learning',
+  'nlp': 'Natural Language Processing (NLP)',
+  'cv': 'Computer Vision',
+  'genai': 'Generative AI',
+  'llm': 'Large Language Models (LLMs)',
+  'llms': 'Large Language Models (LLMs)',
+  'tf': 'TensorFlow',
+  'gql': 'GraphQL',
+  'mongo': 'MongoDB',
+  'es': 'Elasticsearch',
+  'gha': 'GitHub Actions',
+  'rn': 'React Native',
+  'fe': 'Frontend Development',
+  'frontend': 'Frontend Development',
+  'be': 'Backend Development',
+  'backend': 'Backend Development',
+  'fs': 'Full-Stack Development',
+  'fullstack': 'Full-Stack Development',
+  'full-stack': 'Full-Stack Development',
+  'cicd': 'CI/CD Pipelines',
+  'ci/cd': 'CI/CD Pipelines',
+  'ui/ux': 'UI/UX Design',
+  'ui': 'UI/UX Design',
+  'ux': 'UI/UX Design',
+  'qa': 'QA Testing',
+  'devops': 'DevOps',
+  'sre': 'Site Reliability Engineering (SRE)',
+  'sysadmin': 'System Administration',
+  'net': '.NET',
+  'dotnet': '.NET Core'
+};
+
+const TECH_ACRONYMS = {
+  'graphql': 'GraphQL',
+  'rest': 'REST',
+  'api': 'API',
+  'apis': 'APIs',
+  'sql': 'SQL',
+  'nosql': 'NoSQL',
+  'aws': 'AWS',
+  'gcp': 'GCP',
+  'sdk': 'SDK',
+  'jwt': 'JWT',
+  'seo': 'SEO',
+  'css': 'CSS',
+  'html': 'HTML',
+  'xml': 'XML',
+  'json': 'JSON',
+  'svg': 'SVG',
+  'cli': 'CLI',
+  'gui': 'GUI',
+  'iot': 'IoT',
+  'npm': 'NPM',
+  'dns': 'DNS',
+  'tcp': 'TCP',
+  'udp': 'UDP',
+  'ip': 'IP',
+  'vpn': 'VPN',
+  'ssh': 'SSH',
+  'ssl': 'SSL',
+  'tls': 'TLS',
+  'etl': 'ETL',
+  'crm': 'CRM',
+  'erp': 'ERP',
+  'saas': 'SaaS',
+  'paas': 'PaaS',
+  'iaas': 'IaaS',
+  'devops': 'DevOps',
+  'devsecops': 'DevSecOps',
+  'mlops': 'MLOps',
+  'llm': 'LLM',
+  'llms': 'LLMs',
+  'nlp': 'NLP',
+  'ml': 'ML',
+  'ai': 'AI',
+  'ci/cd': 'CI/CD',
+  'ui/ux': 'UI/UX',
+  'ui': 'UI',
+  'ux': 'UX'
+};
+
+/**
+ * Format custom skill string into clean title case while preserving tech acronyms
+ */
+function formatSkillTitleCase(str) {
+  if (!str) return '';
+  return str
+    .split(' ')
+    .map((w) => {
+      const lower = w.toLowerCase();
+      if (TECH_ACRONYMS[lower]) {
+        return TECH_ACRONYMS[lower];
+      }
+      if (w.includes('/') || w.includes('-')) {
+        return w.split(/([/-])/).map((part) => {
+          if (part === '/' || part === '-') return part;
+          const pLower = part.toLowerCase();
+          if (TECH_ACRONYMS[pLower]) return TECH_ACRONYMS[pLower];
+          if (part.length <= 3 && !/^[a-z]+$/.test(part)) return part.toUpperCase();
+          return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
+        }).join('');
+      }
+      return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+    })
+    .join(' ');
+}
+
+/**
+ * Strictly validate that an input is a genuine skill name, and NOT:
+ * - A sentence, phrase, or job description bullet
+ * - A URL, email, address, or phone number
+ * - A number, date range, or year
+ * - Gibberish, punctuation, or placeholder text
+ * Returns { valid: boolean, normalized?: string, reason?: string }
+ */
+function validateSkill(raw) {
+  if (!raw || typeof raw !== 'string') {
+    return { valid: false, reason: 'Skill name cannot be empty.' };
+  }
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) {
+    return { valid: false, reason: 'Skill name cannot be empty.' };
+  }
+
+  const lower = trimmed.toLowerCase();
+
+  // 1. Check known aliases first
+  if (SKILL_ALIASES[lower]) {
+    return { valid: true, normalized: SKILL_ALIASES[lower] };
+  }
+
+  // 2. Check SKILL_DATABASE match (case-insensitive)
+  const dbMatch = SKILL_DATABASE.find((item) => item.name.toLowerCase() === lower);
+  if (dbMatch) {
+    return { valid: true, normalized: dbMatch.name };
+  }
+
+  // 3. Length checks
+  if (trimmed.length === 1) {
+    if (trimmed.toUpperCase() === 'C' || trimmed.toUpperCase() === 'R') {
+      return { valid: true, normalized: trimmed.toUpperCase() };
+    }
+    return { valid: false, reason: 'Skill name must be at least 2 characters (unless "C" or "R").' };
+  }
+
+  if (trimmed.length > 45) {
+    return { valid: false, reason: 'Skill name is too long (maximum 45 characters).' };
+  }
+
+  // 4. Must contain alphabetical letters (rejects numbers/symbols alone)
+  if (!/[a-zA-Z]/.test(trimmed)) {
+    return { valid: false, reason: 'Skill must contain letters (numbers or symbols alone are not skills).' };
+  }
+
+  // 5. Reject URLs / Emails / Web Links
+  if (/https?:\/\/|www\.[a-z0-9_-]+|\b[a-z0-9_.-]+@[a-z0-9_.-]+\.[a-z]{2,}\b|\.(com|org|net|edu|gov|io|co|in)\b/i.test(trimmed)) {
+    return { valid: false, reason: 'URLs and email addresses cannot be added as skills.' };
+  }
+
+  // 6. Reject phone numbers / pure digits / dates
+  if (/^\+?[\d\s\-().]{6,}$/.test(trimmed) || /\b(19\d\d|20\d\d)\s*[-–to]+\s*(19\d\d|20\d\d|present)\b/i.test(trimmed)) {
+    return { valid: false, reason: 'Phone numbers or date ranges cannot be added as skills.' };
+  }
+
+  // 7. Reject sentences, prose, pronouns, job bullet verbs
+  const sentenceWords = trimmed.split(/\s+/);
+  if (sentenceWords.length > 5) {
+    return { valid: false, reason: 'Skills must be concise technologies or tools (max 4-5 words), not full sentences.' };
+  }
+
+  if (/^(i |we |my |our |he |she |they )\b/i.test(trimmed)) {
+    return { valid: false, reason: 'Personal statements cannot be skills. Enter only the technology or tool name.' };
+  }
+
+  const proseRegex = /\b(responsible for|experienced in|experience with|hands-on experience|working on|worked on|developed|designed|managed|ability to|knowledge of|proficient in|skilled at|expert in|familiar with|years of experience|looking for|seeking|in order to|etc|such as|and so on)\b/i;
+  if (proseRegex.test(trimmed)) {
+    return { valid: false, reason: 'Sentences or job descriptions cannot be skills. Enter only the skill or tool name.' };
+  }
+
+  // 8. Placeholders & non-skills
+  const placeholderRegex = /^(none|null|undefined|n\/?a|test|testing|sample|asdf|qwerty|resume|curriculum vitae|cv|references? upon request)$/i;
+  if (placeholderRegex.test(trimmed)) {
+    return { valid: false, reason: `"${trimmed}" is not a valid skill.` };
+  }
+
+  // 9. Allowed characters check
+  // Skills typically allow: letters, numbers, spaces, and + # . / - ( ) & '
+  if (!/^[a-zA-Z0-9+#./()&' -]+$/.test(trimmed)) {
+    return { valid: false, reason: 'Contains invalid special characters. Only +, #, ., /, -, &, () are allowed.' };
+  }
+
+  // Clean and format custom skill
+  const formatted = formatSkillTitleCase(trimmed);
+  return { valid: true, normalized: formatted };
+}
+
+/**
+ * Display inline validation error message and trigger input shake
+ */
+function showSkillValidationError(msg) {
+  const errEl = document.getElementById('skillValidationError');
+  const msgEl = document.getElementById('skillValidationMsg');
+  const inputEl = document.getElementById('newSkillInput');
+  if (errEl && msgEl) {
+    msgEl.textContent = msg;
+    errEl.style.display = 'flex';
+  }
+  if (inputEl) {
+    inputEl.classList.remove('skill-input-invalid');
+    // Force DOM reflow to re-trigger animation if class was already set
+    void inputEl.offsetWidth;
+    inputEl.classList.add('skill-input-invalid');
+  }
+}
+
+/**
+ * Clear inline validation error and remove invalid styling
+ */
+function clearSkillValidationError() {
+  const errEl = document.getElementById('skillValidationError');
+  const inputEl = document.getElementById('newSkillInput');
+  if (errEl) {
+    errEl.style.display = 'none';
+  }
+  if (inputEl) {
+    inputEl.classList.remove('skill-input-invalid');
+  }
+}
+
+/**
+ * Render interactive skill tags based on the current #skills textarea value
+ */
+function renderSkillTags() {
+  const container = document.getElementById('skillsTagContainer');
+  const skillsInput = document.getElementById('skills');
+  if (!container || !skillsInput) return;
+
+  const rawSkills = parseSkillsArray(skillsInput.value);
+
+  if (rawSkills.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  // Filter only valid skills to render as tags
+  const validSkills = [];
+  rawSkills.forEach((s) => {
+    const val = validateSkill(s);
+    if (val.valid) {
+      if (!validSkills.some((existing) => existing.toLowerCase() === val.normalized.toLowerCase())) {
+        validSkills.push(val.normalized);
+      }
+    }
+  });
+
+  if (validSkills.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  container.innerHTML = validSkills.map((skill) => `
+    <span class="skill-chip">
+      <span>${escapeHtml(skill)}</span>
+      <button type="button" class="btn-remove-skill" data-skill="${escapeHtml(skill)}" title="Remove skill">&times;</button>
+    </span>
+  `).join('');
+
+  // Wire remove buttons
+  container.querySelectorAll('.btn-remove-skill').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const skillToRemove = e.currentTarget.getAttribute('data-skill');
+      removeSkill(skillToRemove);
+    });
+  });
+}
+
+/**
+ * Add one or more skills (supports comma-separated) with strict validation.
+ * Rejects non-skills, sentences, URLs, emails, numbers, gibberish.
+ * Returns true if at least one skill was added, false otherwise.
+ */
+function addSkill(skillName) {
+  if (!skillName || !skillName.trim()) {
+    showSkillValidationError('Please enter a skill name (e.g. React, Python, AWS).');
+    return false;
+  }
+  const skillsInput = document.getElementById('skills');
+  if (!skillsInput) return false;
+
+  const currentSkills = parseSkillsArray(skillsInput.value);
+  const rawList = parseSkillsArray(skillName);
+
+  if (rawList.length === 0) {
+    showSkillValidationError('Please enter a valid skill name.');
+    return false;
+  }
+
+  // If a single skill is being added (most common from input bar)
+  if (rawList.length === 1) {
+    const singleRaw = rawList[0];
+    const validation = validateSkill(singleRaw);
+
+    if (!validation.valid) {
+      showSkillValidationError(validation.reason);
+      showToast(validation.reason, 'error');
+      const newSkillInput = document.getElementById('newSkillInput');
+      if (newSkillInput) {
+        newSkillInput.focus();
+      }
+      return false;
+    }
+
+    // Check duplicate
+    const normalized = validation.normalized;
+    const exists = currentSkills.some((s) => s.toLowerCase() === normalized.toLowerCase());
+    if (exists) {
+      clearSkillValidationError();
+      showToast(`"${normalized}" is already in your skills list.`, 'info');
+      const newSkillInput = document.getElementById('newSkillInput');
+      if (newSkillInput) {
+        newSkillInput.value = '';
+        newSkillInput.focus();
+      }
+      return false;
+    }
+
+    // Add valid skill
+    currentSkills.push(normalized);
+    skillsInput.value = currentSkills.join(', ');
+    renderSkillTags();
+    clearSkillValidationError();
+    showToast(`Added skill: ${normalized}`, 'success');
+
+    const newSkillInput = document.getElementById('newSkillInput');
+    if (newSkillInput) {
+      newSkillInput.value = '';
+      newSkillInput.focus();
+    }
+    return true;
+  }
+
+  // Batch / comma-separated skills
+  const added = [];
+  const duplicates = [];
+  const invalid = [];
+
+  rawList.forEach((raw) => {
+    const validation = validateSkill(raw);
+    if (!validation.valid) {
+      invalid.push({ raw, reason: validation.reason });
+    } else {
+      const normalized = validation.normalized;
+      const exists = currentSkills.some((s) => s.toLowerCase() === normalized.toLowerCase());
+      if (exists) {
+        duplicates.push(normalized);
+      } else {
+        currentSkills.push(normalized);
+        added.push(normalized);
+      }
+    }
+  });
+
+  if (added.length > 0) {
+    skillsInput.value = currentSkills.join(', ');
+    renderSkillTags();
+    const newSkillInput = document.getElementById('newSkillInput');
+    if (newSkillInput) {
+      newSkillInput.value = '';
+      newSkillInput.focus();
+    }
+
+    if (invalid.length > 0) {
+      const reasonSummary = invalid.map((i) => `"${i.raw}"`).join(', ');
+      showSkillValidationError(`Added ${added.length} skills. Skipped invalid: ${reasonSummary}`);
+      showToast(`Added: ${added.join(', ')}. Skipped invalid entries.`, 'warning');
+    } else {
+      clearSkillValidationError();
+      showToast(`Added ${added.length} skills: ${added.join(', ')}`, 'success');
+    }
+    return true;
+  }
+
+  // If nothing was added because all were invalid or duplicate
+  if (invalid.length > 0) {
+    showSkillValidationError(invalid[0].reason);
+    showToast(invalid[0].reason, 'error');
+    return false;
+  }
+
+  if (duplicates.length > 0) {
+    clearSkillValidationError();
+    showToast('All entered skills are already in your list.', 'info');
+    const newSkillInput = document.getElementById('newSkillInput');
+    if (newSkillInput) {
+      newSkillInput.value = '';
+    }
+    return false;
+  }
+
+  return false;
+}
+
+/**
+ * Remove a skill by name and sync to textarea
+ */
+function removeSkill(skillToRemove) {
+  const skillsInput = document.getElementById('skills');
+  if (!skillsInput) return;
+
+  const currentSkills = parseSkillsArray(skillsInput.value);
+  const filtered = currentSkills.filter(
+    (s) => s.toLowerCase() !== (skillToRemove || '').toLowerCase().trim()
+  );
+
+  skillsInput.value = filtered.join(', ');
+  renderSkillTags();
+}
 
 const SkillsAutocomplete = {
   inputEl: null,
@@ -887,8 +1249,10 @@ const SkillsAutocomplete = {
   },
 
   handleInput() {
-    const query = this.inputEl.value.trim().toLowerCase();
+    const rawVal = this.inputEl.value.trim();
+    const query = rawVal.toLowerCase();
     if (!query) {
+      clearSkillValidationError();
       this.close();
       return;
     }
@@ -919,11 +1283,21 @@ const SkillsAutocomplete = {
 
   render(query) {
     if (this.currentMatches.length === 0) {
-      this.menuEl.innerHTML = `
-        <div class="autocomplete-empty">
-          Press <strong>Enter</strong> to add "${escapeHtml(this.inputEl.value.trim())}" as a custom skill
-        </div>
-      `;
+      const val = validateSkill(this.inputEl.value.trim());
+      if (val.valid) {
+        this.menuEl.innerHTML = `
+          <div class="autocomplete-empty valid">
+            Press <strong>Enter</strong> to add "<strong>${escapeHtml(val.normalized)}</strong>" as a skill
+          </div>
+        `;
+      } else {
+        this.menuEl.innerHTML = `
+          <div class="autocomplete-empty invalid">
+            <span class="autocomplete-invalid-icon">⚠️</span>
+            <span>${escapeHtml(val.reason)}</span>
+          </div>
+        `;
+      }
       this.menuEl.classList.add('open');
       this.isOpen = true;
       return;
@@ -2095,9 +2469,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   btnAddSkill?.addEventListener('click', () => {
     if (newSkillInput && newSkillInput.value.trim()) {
-      addSkill(newSkillInput.value.trim());
-      newSkillInput.value = '';
-      SkillsAutocomplete.close();
+      const added = addSkill(newSkillInput.value.trim());
+      if (added) {
+        SkillsAutocomplete.close();
+      }
+    } else if (newSkillInput) {
+      showSkillValidationError('Please type a skill name first (e.g. React, Python, Docker).');
+      newSkillInput.focus();
     }
   });
 
@@ -2113,16 +2491,47 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       e.preventDefault();
       if (newSkillInput.value.trim()) {
-        addSkill(newSkillInput.value.trim());
-        newSkillInput.value = '';
-        SkillsAutocomplete.close();
+        const added = addSkill(newSkillInput.value.trim());
+        if (added) {
+          SkillsAutocomplete.close();
+        }
+      } else {
+        showSkillValidationError('Please type a skill name first (e.g. React, Python, Docker).');
       }
     }
+  });
+
+  newSkillInput?.addEventListener('input', () => {
+    clearSkillValidationError();
   });
 
   // Two-way sync: manual editing in #skills raw textarea immediately re-renders tags
   document.getElementById('skills')?.addEventListener('input', () => {
     renderSkillTags();
+  });
+
+  // When raw textarea loses focus, clean invalid entries
+  document.getElementById('skills')?.addEventListener('blur', () => {
+    const skillsInput = document.getElementById('skills');
+    if (!skillsInput) return;
+    const rawSkills = parseSkillsArray(skillsInput.value);
+    const valid = [];
+    let invalidCount = 0;
+    rawSkills.forEach((s) => {
+      const val = validateSkill(s);
+      if (val.valid) {
+        if (!valid.some((existing) => existing.toLowerCase() === val.normalized.toLowerCase())) {
+          valid.push(val.normalized);
+        }
+      } else {
+        invalidCount++;
+      }
+    });
+    if (invalidCount > 0) {
+      skillsInput.value = valid.join(', ');
+      renderSkillTags();
+      showToast(`Cleaned ${invalidCount} invalid skill entries from raw list.`, 'info');
+    }
   });
 
   // Quick suggestions chips
