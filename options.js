@@ -1289,6 +1289,19 @@ const MonthYearPicker = {
 // ============================================================
 
 /**
+ * Update the text inspector editor and character count badge
+ * @param {string} text
+ */
+function updateResumeInspector(text) {
+  const inspector = document.getElementById('resumeInspectorCard');
+  const editor = document.getElementById('extractedResumeEditor');
+  const badge = document.getElementById('inspectorCharBadge');
+  if (editor) editor.value = text || '';
+  if (badge) badge.textContent = `${(text || '').length} chars`;
+  if (inspector) inspector.style.display = (text && text.trim().length > 0) ? 'block' : 'none';
+}
+
+/**
  * Handle resume file selection, persistence, and data extraction
  * @param {File} file
  */
@@ -1298,7 +1311,7 @@ async function handleResumeUpload(file) {
   const statusEl = document.getElementById('resumeStatus');
   statusEl.style.display = 'flex';
   statusEl.className = 'resume-status-box loading';
-  statusEl.innerHTML = `<span class="geist-spinner"></span><span>Reading and saving <strong>${escapeHtml(file.name)}</strong>…</span>`;
+  statusEl.innerHTML = `<span class="geist-spinner"></span><span>Reading and analyzing <strong>${escapeHtml(file.name)}</strong>…</span>`;
 
   try {
     let resumeText = '';
@@ -1308,25 +1321,35 @@ async function handleResumeUpload(file) {
     // 1. Convert to Base64 cleanly and safely
     base64Pdf = arrayBufferToBase64(arrayBuffer);
 
-    // 2. Extract text (using pure JS Flate decompression for PDF)
-    if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+    // 2. Multi-tier text extraction
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    const isDocx = file.name.toLowerCase().endsWith('.docx') || file.type.includes('word') || file.type.includes('officedocument');
+
+    if (isPdf) {
       if (window.QuickFillResumeParser && window.QuickFillResumeParser.extractTextFromPDFBuffer) {
         resumeText = await window.QuickFillResumeParser.extractTextFromPDFBuffer(arrayBuffer);
       } else {
         resumeText = extractTextFromPDFBuffer(arrayBuffer);
       }
+    } else if (isDocx) {
+      if (window.QuickFillResumeParser && window.QuickFillResumeParser.extractTextFromDocxBuffer) {
+        resumeText = await window.QuickFillResumeParser.extractTextFromDocxBuffer(arrayBuffer);
+      }
     } else {
       resumeText = await file.text();
     }
 
-    // 3. PERSIST RESUME FILE IMMEDIATELY to chrome.storage.local
+    // 3. Update Text Inspector Editor with extracted text
+    updateResumeInspector(resumeText);
+
+    // 4. Persist file metadata
     const resumeData = {
       name: file.name,
-      type: file.type || 'application/pdf',
+      type: file.type || (isPdf ? 'application/pdf' : (isDocx ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'text/plain')),
       size: file.size,
       lastModified: file.lastModified || Date.now(),
       base64: base64Pdf,
-      extractedText: (resumeText || '').substring(0, 8000),
+      extractedText: (resumeText || '').substring(0, 10000),
       uploadedAt: new Date().toISOString(),
     };
     currentSavedResume = resumeData;
@@ -1338,153 +1361,279 @@ async function handleResumeUpload(file) {
     }
     renderSavedResumeBadge(resumeData);
 
-    // 3.5 INSTANT PROGRESSIVE HYDRATION (< 25ms)
-    // Populate standard contact, education, and skill fields immediately via local regex heuristics
-    let fastPopulatedCount = 0;
-    if (window.QuickFillResumeParser && typeof window.QuickFillResumeParser.extractResumeHeuristics === 'function') {
-      try {
-        const fastResult = window.QuickFillResumeParser.extractResumeHeuristics(resumeText || '');
-        const fastProfile = fastResult.profile || {};
-        Object.entries(fastProfile).forEach(([field, value]) => {
-          const el = document.getElementById(field);
-          if (el && value && String(value).trim()) {
-            el.value = String(value).trim();
-            fastPopulatedCount++;
-            el.style.borderColor = 'var(--accent-blue)';
-            setTimeout(() => { el.style.borderColor = ''; }, 2000);
-          }
-        });
-
-        if (!document.getElementById('fullName').value && (fastProfile.firstName || fastProfile.lastName)) {
-          document.getElementById('fullName').value = [fastProfile.firstName, fastProfile.lastName].filter(Boolean).join(' ');
-        }
-        renderSkillTags();
-      } catch (fastErr) {
-        console.warn('[QuickFill] Fast heuristic hydration note:', fastErr);
-      }
-    }
-
-    const aiSettings = gatherAISettings();
-    const hasAIKey = !!(aiSettings && aiSettings.apiKey && aiSettings.apiKey.trim());
-
-    if (hasAIKey) {
-      statusEl.innerHTML = `<span class="geist-spinner"></span><span>⚡ Fast preview ready (${fastPopulatedCount} fields)! Refining work history & summary with AI in background…</span>`;
-    } else {
-      statusEl.innerHTML = `<span class="geist-spinner"></span><span>Extracting candidate details from <strong>${escapeHtml(file.name)}</strong>…</span>`;
-    }
-
-    // 4. Parse resume data (try background worker, fallback to in-page parser)
-    let response = null;
-
-    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-      try {
-        response = await chrome.runtime.sendMessage({
-          action: 'PARSE_RESUME',
-          resumeText,
-          base64Pdf,
-          mimeType: file.type || 'application/pdf',
-          aiSettings,
-        });
-      } catch (msgErr) {
-        console.warn('[QuickFill] Background message failed, using in-page parser:', msgErr);
-      }
-    }
-
-    if (!response && window.QuickFillResumeParser) {
-      response = await window.QuickFillResumeParser.parseResume({
-        resumeText,
-        base64Pdf,
-        mimeType: file.type || 'application/pdf',
-        aiSettings,
-      });
-    }
-
-    if (!response || response.error) {
-      throw new Error(response?.error || 'Resume parsing service returned empty data');
-    }
-
-    const { profile = {}, customQA = [] } = response;
-    let populatedCount = 0;
-
-    // 5. Populate profile inputs
-    Object.entries(profile).forEach(([field, value]) => {
-      const el = document.getElementById(field);
-      if (el && value && String(value).trim()) {
-        el.value = String(value).trim();
-        populatedCount++;
-        // Visual highlight
-        el.style.borderColor = 'var(--accent-blue)';
-        setTimeout(() => { el.style.borderColor = ''; }, 3000);
-      }
+    // 5. Run full parse and application
+    await processParsedResume({
+      resumeText,
+      base64Pdf,
+      mimeType: resumeData.type,
+      fileName: file.name,
+      resumeData,
     });
-
-    // Auto-compute fullName if missing
-    if (!document.getElementById('fullName').value && (profile.firstName || profile.lastName)) {
-      document.getElementById('fullName').value = [profile.firstName, profile.lastName].filter(Boolean).join(' ');
-    }
-
-    // Update interactive skill tags
-    renderSkillTags();
-
-    // Populate parsed work history if returned from resume parser
-    if (Array.isArray(profile.workHistory) && profile.workHistory.length > 0) {
-      currentWorkHistory = profile.workHistory;
-      renderExperienceList();
-    }
-
-    // 6. Merge custom Q&A items
-    let qaCount = 0;
-    if (Array.isArray(customQA) && customQA.length > 0) {
-      customQA.forEach((newQA) => {
-        if (!newQA.question || !newQA.answer) return;
-        const exists = currentCustomQA.some(
-          (q) => q.question.toLowerCase().trim() === newQA.question.toLowerCase().trim()
-        );
-        if (!exists) {
-          currentCustomQA.push({
-            id: 'qa_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-            question: newQA.question,
-            answer: newQA.answer,
-            autoSaved: true,
-          });
-          qaCount++;
-        }
-      });
-      renderCustomQAList();
-    }
-
-    // 7. Auto-save populated profile so user data is instantly saved
-    const updatedProfile = gatherProfile();
-    const updatedQA = gatherCustomQA();
-    if (hasStorage()) {
-      await chrome.storage.local.set({
-        profile: updatedProfile,
-        customQA: updatedQA,
-        savedResume: resumeData,
-      });
-    } else {
-      localStorage.setItem('quickfill_profile', JSON.stringify(updatedProfile));
-      localStorage.setItem('quickfill_customQA', JSON.stringify(updatedQA));
-      localStorage.setItem('quickfill_savedResume', JSON.stringify(resumeData));
-    }
-
-    statusEl.className = 'resume-status-box success';
-    statusEl.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Success! Resume saved & ready to auto-upload on job forms. Extracted <strong>${populatedCount || fastPopulatedCount} profile fields</strong> and <strong>${qaCount} custom questions</strong>.</span>`;
-    showToast(`Resume saved & imported! ${populatedCount || fastPopulatedCount} fields populated.`, 'success');
 
   } catch (err) {
     Logger.error('options', err, { context: 'handleResumeUpload' });
     console.error('[Resume Parse Error]', err);
-    if (fastPopulatedCount > 0) {
-      statusEl.className = 'resume-status-box success';
-      statusEl.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Resume saved! Populated <strong>${fastPopulatedCount} fields</strong> via instant heuristics.</span>`;
-      showToast(`Resume saved! ${fastPopulatedCount} fields populated.`, 'success');
-      return;
-    }
     statusEl.className = 'resume-status-box error';
     statusEl.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg><span>Parsing error: ${escapeHtml(err.message)}</span>`;
     showToast('Failed to parse resume: ' + err.message, 'error');
   }
+}
+
+/**
+ * Handle direct pasted resume text parsing
+ */
+async function handlePastedResumeParse() {
+  const textarea = document.getElementById('pastedResumeText');
+  const text = (textarea?.value || '').trim();
+
+  if (!text || text.length < 20) {
+    showToast('Please paste your resume text (at least 20 characters).', 'error');
+    textarea?.focus();
+    return;
+  }
+
+  const statusEl = document.getElementById('resumeStatus');
+  statusEl.style.display = 'flex';
+  statusEl.className = 'resume-status-box loading';
+  statusEl.innerHTML = `<span class="geist-spinner"></span><span>Parsing pasted resume text (${text.length} chars)…</span>`;
+
+  try {
+    updateResumeInspector(text);
+
+    const resumeData = {
+      name: 'Pasted-Resume.txt',
+      type: 'text/plain',
+      size: text.length,
+      lastModified: Date.now(),
+      base64: null,
+      extractedText: text.substring(0, 10000),
+      uploadedAt: new Date().toISOString(),
+    };
+    currentSavedResume = resumeData;
+
+    if (hasStorage()) {
+      await chrome.storage.local.set({ savedResume: resumeData });
+    } else {
+      localStorage.setItem('quickfill_savedResume', JSON.stringify(resumeData));
+    }
+    renderSavedResumeBadge(resumeData);
+
+    await processParsedResume({
+      resumeText: text,
+      base64Pdf: null,
+      mimeType: 'text/plain',
+      fileName: 'Pasted Resume',
+      resumeData,
+    });
+  } catch (err) {
+    Logger.error('options', err, { context: 'handlePastedResumeParse' });
+    statusEl.className = 'resume-status-box error';
+    statusEl.innerHTML = `<span>Parsing error: ${escapeHtml(err.message)}</span>`;
+    showToast('Failed to parse pasted text: ' + err.message, 'error');
+  }
+}
+
+/**
+ * Handle re-parsing profile directly from the inspector editor
+ */
+async function handleReparseExtractedText() {
+  const editor = document.getElementById('extractedResumeEditor');
+  const text = (editor?.value || '').trim();
+
+  if (!text) {
+    showToast('Extracted text is empty. Please enter or paste some text.', 'error');
+    return;
+  }
+
+  const statusEl = document.getElementById('resumeStatus');
+  statusEl.style.display = 'flex';
+  statusEl.className = 'resume-status-box loading';
+  statusEl.innerHTML = `<span class="geist-spinner"></span><span>Re-parsing candidate profile from updated text…</span>`;
+
+  try {
+    const resumeData = currentSavedResume || {
+      name: 'Updated-Resume.txt',
+      type: 'text/plain',
+      size: text.length,
+      lastModified: Date.now(),
+      base64: null,
+      extractedText: text.substring(0, 10000),
+      uploadedAt: new Date().toISOString(),
+    };
+    resumeData.extractedText = text.substring(0, 10000);
+
+    if (hasStorage()) {
+      await chrome.storage.local.set({ savedResume: resumeData });
+    } else {
+      localStorage.setItem('quickfill_savedResume', JSON.stringify(resumeData));
+    }
+
+    await processParsedResume({
+      resumeText: text,
+      base64Pdf: resumeData.base64,
+      mimeType: resumeData.type,
+      fileName: resumeData.name,
+      resumeData,
+    });
+  } catch (err) {
+    statusEl.className = 'resume-status-box error';
+    statusEl.innerHTML = `<span>Re-parse error: ${escapeHtml(err.message)}</span>`;
+    showToast('Failed to re-parse: ' + err.message, 'error');
+  }
+}
+
+/**
+ * Central orchestrator: parses extracted text with instant heuristics + AI refinement,
+ * populates the form inputs, and saves profile to storage.
+ */
+async function processParsedResume({ resumeText, base64Pdf, mimeType, fileName, resumeData }) {
+  const statusEl = document.getElementById('resumeStatus');
+
+  // Step 1: Instant progressive heuristic hydration (< 20ms)
+  let fastPopulatedCount = 0;
+  if (window.QuickFillResumeParser && typeof window.QuickFillResumeParser.extractResumeHeuristics === 'function') {
+    try {
+      const fastResult = window.QuickFillResumeParser.extractResumeHeuristics(resumeText || '');
+      const fastProfile = fastResult.profile || {};
+      Object.entries(fastProfile).forEach(([field, value]) => {
+        if (field === 'workHistory') return;
+        const el = document.getElementById(field);
+        if (el && value && String(value).trim()) {
+          el.value = String(value).trim();
+          fastPopulatedCount++;
+          el.style.borderColor = 'var(--accent-blue)';
+          setTimeout(() => { el.style.borderColor = ''; }, 2000);
+        }
+      });
+
+      if (!document.getElementById('fullName').value && (fastProfile.firstName || fastProfile.lastName)) {
+        document.getElementById('fullName').value = [fastProfile.firstName, fastProfile.lastName].filter(Boolean).join(' ');
+      }
+      renderSkillTags();
+
+      if (Array.isArray(fastProfile.workHistory) && fastProfile.workHistory.length > 0) {
+        currentWorkHistory = fastProfile.workHistory;
+        renderExperienceList();
+      }
+    } catch (fastErr) {
+      console.warn('[QuickFill] Fast heuristic hydration note:', fastErr);
+    }
+  }
+
+  const aiSettings = gatherAISettings();
+  const hasAIKey = !!(aiSettings && aiSettings.apiKey && aiSettings.apiKey.trim());
+
+  if (hasAIKey) {
+    statusEl.innerHTML = `<span class="geist-spinner"></span><span>⚡ Fast preview ready (${fastPopulatedCount} fields)! Refining work history & summary with AI…</span>`;
+  } else {
+    statusEl.innerHTML = `<span class="geist-spinner"></span><span>Extracting candidate details from <strong>${escapeHtml(fileName || 'resume')}</strong>…</span>`;
+  }
+
+  // Step 2: Full parsing via background worker or in-page parser
+  let response = null;
+  if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+    try {
+      response = await chrome.runtime.sendMessage({
+        action: 'PARSE_RESUME',
+        resumeText,
+        base64Pdf,
+        mimeType: mimeType || 'application/pdf',
+        aiSettings,
+      });
+    } catch (msgErr) {
+      console.warn('[QuickFill] Background message failed, using in-page parser:', msgErr);
+    }
+  }
+
+  if (!response && window.QuickFillResumeParser) {
+    response = await window.QuickFillResumeParser.parseResume({
+      resumeText,
+      base64Pdf,
+      mimeType: mimeType || 'application/pdf',
+      aiSettings,
+    });
+  }
+
+  if (!response || response.error) {
+    // If fast heuristics already populated fields, treat as graceful fallback
+    if (fastPopulatedCount > 0) {
+      statusEl.className = 'resume-status-box success';
+      statusEl.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Resume imported! Populated <strong>${fastPopulatedCount} fields</strong> via local parser.</span>`;
+      showToast(`Resume imported! ${fastPopulatedCount} fields populated.`, 'success');
+      return;
+    }
+    throw new Error(response?.error || 'Resume parsing service returned empty data');
+  }
+
+  const { profile = {}, customQA = [] } = response;
+  let populatedCount = 0;
+
+  // Step 3: Populate profile inputs
+  Object.entries(profile).forEach(([field, value]) => {
+    if (field === 'workHistory') return;
+    const el = document.getElementById(field);
+    if (el && value && String(value).trim()) {
+      el.value = String(value).trim();
+      populatedCount++;
+      el.style.borderColor = 'var(--accent-blue)';
+      setTimeout(() => { el.style.borderColor = ''; }, 3000);
+    }
+  });
+
+  // Auto-compute fullName if missing
+  if (!document.getElementById('fullName').value && (profile.firstName || profile.lastName)) {
+    document.getElementById('fullName').value = [profile.firstName, profile.lastName].filter(Boolean).join(' ');
+  }
+
+  // Update interactive skill tags
+  renderSkillTags();
+
+  // Populate parsed work history
+  if (Array.isArray(profile.workHistory) && profile.workHistory.length > 0) {
+    currentWorkHistory = profile.workHistory;
+    renderExperienceList();
+  }
+
+  // Step 4: Merge custom Q&A items
+  let qaCount = 0;
+  if (Array.isArray(customQA) && customQA.length > 0) {
+    customQA.forEach((newQA) => {
+      if (!newQA.question || !newQA.answer) return;
+      const exists = currentCustomQA.some(
+        (q) => q.question.toLowerCase().trim() === newQA.question.toLowerCase().trim()
+      );
+      if (!exists) {
+        currentCustomQA.push({
+          id: 'qa_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+          question: newQA.question,
+          answer: newQA.answer,
+          autoSaved: true,
+        });
+        qaCount++;
+      }
+    });
+    renderCustomQAList();
+  }
+
+  // Step 5: Auto-save updated profile
+  const updatedProfile = gatherProfile();
+  const updatedQA = gatherCustomQA();
+  if (hasStorage()) {
+    await chrome.storage.local.set({
+      profile: updatedProfile,
+      customQA: updatedQA,
+      ...(resumeData ? { savedResume: resumeData } : {}),
+    });
+  } else {
+    localStorage.setItem('quickfill_profile', JSON.stringify(updatedProfile));
+    localStorage.setItem('quickfill_customQA', JSON.stringify(updatedQA));
+    if (resumeData) localStorage.setItem('quickfill_savedResume', JSON.stringify(resumeData));
+  }
+
+  const finalCount = populatedCount || fastPopulatedCount;
+  statusEl.className = 'resume-status-box success';
+  statusEl.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Success! Extracted <strong>${finalCount} profile fields</strong>${currentWorkHistory.length > 0 ? ` & <strong>${currentWorkHistory.length} roles</strong>` : ''} and <strong>${qaCount} custom questions</strong>.</span>`;
+  showToast(`Resume imported! ${finalCount} fields populated.`, 'success');
 }
 
 /**
@@ -1985,6 +2134,59 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
+
+  // Resume Mode Switcher Tabs
+  const tabUpload = document.getElementById('tabUploadResume');
+  const tabPaste = document.getElementById('tabPasteResume');
+  const uploadContainer = document.getElementById('resumeUploadContainer');
+  const pasteContainer = document.getElementById('resumePasteContainer');
+
+  tabUpload?.addEventListener('click', () => {
+    tabUpload.classList.add('active');
+    tabUpload.setAttribute('aria-selected', 'true');
+    tabPaste?.classList.remove('active');
+    tabPaste?.setAttribute('aria-selected', 'false');
+    if (uploadContainer) uploadContainer.style.display = 'block';
+    if (pasteContainer) pasteContainer.style.display = 'none';
+  });
+
+  tabPaste?.addEventListener('click', () => {
+    tabPaste.classList.add('active');
+    tabPaste.setAttribute('aria-selected', 'true');
+    tabUpload?.classList.remove('active');
+    tabUpload?.setAttribute('aria-selected', 'false');
+    if (pasteContainer) pasteContainer.style.display = 'flex';
+    if (uploadContainer) uploadContainer.style.display = 'none';
+  });
+
+  // Resume Paste Zone actions
+  const pastedTextarea = document.getElementById('pastedResumeText');
+  const pasteCharCount = document.getElementById('pasteCharCount');
+
+  pastedTextarea?.addEventListener('input', (e) => {
+    const len = e.target.value.length;
+    if (pasteCharCount) pasteCharCount.textContent = `${len} character${len === 1 ? '' : 's'}`;
+  });
+
+  document.getElementById('btnClearPastedResume')?.addEventListener('click', () => {
+    if (pastedTextarea) {
+      pastedTextarea.value = '';
+      if (pasteCharCount) pasteCharCount.textContent = '0 characters';
+      pastedTextarea.focus();
+    }
+  });
+
+  document.getElementById('btnParsePastedResume')?.addEventListener('click', handlePastedResumeParse);
+
+  // Resume Text Inspector Toggle & Reparse
+  const inspectorCard = document.getElementById('resumeInspectorCard');
+  const inspectorBody = document.getElementById('inspectorBody');
+  document.getElementById('btnToggleInspector')?.addEventListener('click', () => {
+    const isOpen = inspectorCard?.classList.toggle('open');
+    if (inspectorBody) inspectorBody.style.display = isOpen ? 'flex' : 'none';
+  });
+
+  document.getElementById('btnReparseExtractedText')?.addEventListener('click', handleReparseExtractedText);
 
   // Resume Upload handling
   const dropZone = document.getElementById('resumeDropZone');

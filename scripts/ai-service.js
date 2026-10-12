@@ -447,13 +447,18 @@
     /**
      * Call Google Gemini API with tuned token limit, low temperature, and configurable timeout
      */
-    async callGemini(apiKey, model, promptOrParts, maxTokens = 600, timeoutMs = 10000, isRetry = false) {
+    async callGemini(apiKey, model, promptOrParts, maxTokens = 600, timeoutMs = 12000, isRetry = false) {
       const parts = typeof promptOrParts === 'string'
         ? [{ text: promptOrParts }]
         : promptOrParts;
 
       const cleanKey = (apiKey || '').trim().replace(/^["']|["']$/g, '');
-      let targetModel = model || 'gemini-3.8-flash';
+      let rawModel = (model || 'gemini-2.0-flash').replace(/^models\//, '');
+      // If a non-existent or experimental model number like 3.8/3.6 is passed, prioritize gemini-2.0-flash
+      let targetModel = rawModel;
+      if (rawModel.includes('3.8') || rawModel.includes('3.6')) {
+        targetModel = 'gemini-2.0-flash';
+      }
 
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${cleanKey}`;
 
@@ -495,10 +500,15 @@
           throw new Error(`Gemini rate limit reached (HTTP 429): ${errorMsg}`);
         }
 
-        // Auto-fallback if targetModel is retired or not found
-        if ((response.status === 404 || errorMsg.includes('not found') || errorMsg.includes('not supported')) && targetModel !== 'gemini-1.5-flash') {
-          Logger.warn('ai-service', `Model ${targetModel} unavailable, retrying with gemini-1.5-flash`);
-          return await this.callGemini(apiKey, 'gemini-1.5-flash', promptOrParts, maxTokens, timeoutMs, isRetry);
+        // Auto-fallback ladder if targetModel is retired or not found
+        if (response.status === 404 || errorMsg.includes('not found') || errorMsg.includes('not supported')) {
+          if (targetModel !== 'gemini-2.0-flash' && targetModel !== 'gemini-1.5-flash') {
+            Logger.warn('ai-service', `Model ${targetModel} unavailable, retrying with gemini-2.0-flash`);
+            return await this.callGemini(apiKey, 'gemini-2.0-flash', promptOrParts, maxTokens, timeoutMs, isRetry);
+          } else if (targetModel === 'gemini-2.0-flash') {
+            Logger.warn('ai-service', `Retrying with gemini-1.5-flash`);
+            return await this.callGemini(apiKey, 'gemini-1.5-flash', promptOrParts, maxTokens, timeoutMs, isRetry);
+          }
         }
 
         // Auto-retry if API recommends a newer model

@@ -87,33 +87,101 @@
           </div>
         </div>
         <div class="card-body">
-          <div class="resume-upload-zone" id="resumeDropZone">
-            <input type="file" id="resumeFileInput" accept=".pdf,.doc,.docx,.txt" style="display: none;" />
-            <svg class="upload-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="17 8 12 3 7 8"></polyline>
-              <line x1="12" y1="3" x2="12" y2="15"></line>
-            </svg>
-            <p class="upload-prompt-text">
-              Drag &amp; drop your resume here, or <button type="button" id="btnBrowseResume" class="btn-inline-browse">browse files</button>
-            </p>
-            <span class="upload-hint-text">PDF, DOCX, or TXT &bull; FlateDecode local extraction &bull; Max 10MB</span>
+          <!-- Resume Import Mode Selector -->
+          <div class="resume-mode-tabs" role="tablist">
+            <button type="button" class="resume-tab-btn active" id="tabUploadResume" role="tab" aria-selected="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              <span>Upload Document</span>
+            </button>
+            <button type="button" class="resume-tab-btn" id="tabPasteResume" role="tab" aria-selected="false">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+              </svg>
+              <span>Paste Resume / LinkedIn Text</span>
+            </button>
           </div>
 
-          <!-- Saved Resume Badge -->
-          <div id="savedResumeInfo" class="saved-resume-badge-card" style="display: none;">
-            <div class="saved-resume-meta-box">
-              <svg class="saved-file-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="20 6 9 17 4 12"></polyline>
+          <!-- Mode 1: File Upload Drop Zone -->
+          <div id="resumeUploadContainer">
+            <div class="resume-upload-zone" id="resumeDropZone">
+              <input type="file" id="resumeFileInput" accept=".pdf,.doc,.docx,.txt" style="display: none;" />
+              <svg class="upload-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
               </svg>
-              <div>
-                <div class="saved-resume-name" id="savedResumeFileName">Resume.pdf</div>
-                <div class="saved-resume-meta" id="savedResumeMeta">Ready to auto-upload on job boards</div>
+              <p class="upload-prompt-text">
+                Drag &amp; drop your resume here, or <button type="button" id="btnBrowseResume" class="btn-inline-browse">browse files</button>
+              </p>
+              <span class="upload-hint-text">PDF, DOCX, or TXT &bull; FlateDecode local extraction &bull; Max 10MB</span>
+            </div>
+
+            <!-- Saved Resume Badge -->
+            <div id="savedResumeInfo" class="saved-resume-badge-card" style="display: none;">
+              <div class="saved-resume-meta-box">
+                <svg class="saved-file-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <div>
+                  <div class="saved-resume-name" id="savedResumeFileName">Resume.pdf</div>
+                  <div class="saved-resume-meta" id="savedResumeMeta">Ready to auto-upload on job boards</div>
+                </div>
+              </div>
+              <div class="saved-resume-actions">
+                <button type="button" id="btnReplaceResume" class="btn-secondary" title="Upload a different resume">Replace</button>
+                <button type="button" id="btnDeleteResume" class="btn-secondary" title="Remove saved resume">Remove</button>
               </div>
             </div>
-            <div class="saved-resume-actions">
-              <button type="button" id="btnReplaceResume" class="btn-secondary" title="Upload a different resume">Replace</button>
-              <button type="button" id="btnDeleteResume" class="btn-secondary" title="Remove saved resume">Remove</button>
+          </div>
+
+          <!-- Mode 2: Direct Resume Text Paste -->
+          <div id="resumePasteContainer" class="resume-paste-zone" style="display: none;">
+            <div class="paste-prompt-header">
+              <span class="paste-title">Paste your resume, CV, or LinkedIn profile text</span>
+              <span class="paste-hint">Works 100% reliably regardless of PDF file layout or font encoding</span>
+            </div>
+            <textarea id="pastedResumeText" class="resume-textarea" rows="8" placeholder="Paste your resume text here (e.g., from LinkedIn 'Save to PDF', Google Docs, or Word)..."></textarea>
+            <div class="paste-actions-bar">
+              <span class="paste-char-count" id="pasteCharCount">0 characters</span>
+              <div class="paste-buttons">
+                <button type="button" id="btnClearPastedResume" class="btn-secondary" style="font-size: 12px; height: 32px;">Clear</button>
+                <button type="button" id="btnParsePastedResume" class="btn-primary-vercel" style="font-size: 12px; height: 32px;">
+                  <span>Parse &amp; Auto-Fill Profile</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Extracted Resume Text Inspector / Editor -->
+          <div class="resume-inspector-card" id="resumeInspectorCard" style="display: none;">
+            <div class="inspector-header" id="btnToggleInspector">
+              <div class="inspector-title-group">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+                <span>Extracted Resume Text Inspector</span>
+                <span class="badge-tag" id="inspectorCharBadge">0 chars</span>
+              </div>
+              <button type="button" class="inspector-toggle-btn" aria-label="Toggle text inspector">
+                <svg class="chevron-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+            </div>
+            <div class="inspector-body" id="inspectorBody" style="display: none;">
+              <p class="inspector-desc">Review or edit the raw text extracted from your document. If any information is missing or misread, you can edit it below and re-parse with 1 click.</p>
+              <textarea id="extractedResumeEditor" class="resume-textarea mono-text" rows="6"></textarea>
+              <div class="inspector-actions">
+                <button type="button" id="btnReparseExtractedText" class="btn-primary-vercel" style="font-size: 12px; height: 32px;">
+                  <span>Re-parse Profile from This Text</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -726,6 +794,7 @@
   <!-- Toast (Sonner Style) -->
   <div id="toast" class="toast"></div>
 
+  <script src="scripts/pdf.min.js"></script>
   <script src="scripts/logger.js"></script>
   <script src="scripts/field-matcher.js"></script>
   <script src="scripts/ai-service.js"></script>

@@ -43,5 +43,14 @@
   "options_page": "options.html",
   "background": {
     "service_worker": "background.js"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "scripts/pdf.worker.min.js",
+        "scripts/pdf.min.js"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }
